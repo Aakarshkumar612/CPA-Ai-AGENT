@@ -1,5 +1,9 @@
-## render.yaml — Deploy CPA AI Agent on Render
+## render.yaml — Deploy CPA AI Agent on Render (Free Tier)
 ## Docs: https://render.com/docs/blueprint-spec
+##
+## Note: Free plan services spin down after 15 min of inactivity.
+## First request after sleep takes ~30s to wake up.
+## SQLite data does NOT persist across deploys on free plan (no disk).
 
 services:
 
@@ -8,7 +12,7 @@ services:
     name: cpa-ai-agent-backend
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: starter           # $7/mo — needed for persistent disk
+    plan: free
     region: oregon
 
     envVars:
@@ -17,18 +21,13 @@ services:
       - key: APIFY_API_TOKEN
         sync: false           # Optional — leave blank to use mock mode
       - key: USE_MOCK_APIFY
-        value: "true"         # Change to false once APIFY_API_TOKEN is set
+        value: "true"
       - key: DATABASE_URL
-        value: sqlite:////app/data/cpa_agent.db
+        value: sqlite:///cpa_agent.db
       - key: LOG_LEVEL
         value: info
       - key: PYTHONUNBUFFERED
         value: "1"
-
-    disk:
-      name: cpa-data
-      mountPath: /app/data    # persists DB + output_reports across deploys
-      sizeGB: 1
 
     healthCheckPath: /api/health
 
@@ -49,13 +48,11 @@ services:
         value: public, max-age=3600
 
     routes:
-      # Serve dashboard.html for /dashboard (without .html extension)
       - type: rewrite
         source: /dashboard
         destination: /dashboard.html
 
     envVars:
-      # REQUIRED after backend deploys — set to your backend URL:
-      # https://cpa-ai-agent-backend.onrender.com
+      # Set this AFTER backend deploys — use your backend's .onrender.com URL
       - key: VITE_API_URL
         sync: false
