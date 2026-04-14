@@ -1,17 +1,5 @@
 ## render.yaml — Deploy CPA AI Agent on Render
 ## Docs: https://render.com/docs/blueprint-spec
-##
-## Two deployment modes for the backend:
-##   A) Docker (default, below) — exact image, self-contained
-##   B) Native Python — lighter, faster cold-starts on Render
-##      Switch by uncommenting the native-python block and commenting Docker block.
-##
-## Deploy steps:
-##   1. Push repo to GitHub
-##   2. Connect repo in Render dashboard → "New Blueprint"
-##   3. Set GROQ_API_KEY and APIFY_API_TOKEN in Render dashboard
-##   4. After backend deploys, set VITE_API_URL on the frontend service
-##      to https://cpa-ai-agent-backend.onrender.com and redeploy frontend
 
 services:
 
@@ -27,7 +15,7 @@ services:
       - key: GROQ_API_KEY
         sync: false           # Required — set in Render dashboard
       - key: APIFY_API_TOKEN
-        sync: false           # Optional — set false if using mock mode
+        sync: false           # Optional — leave blank to use mock mode
       - key: USE_MOCK_APIFY
         value: "true"         # Change to false once APIFY_API_TOKEN is set
       - key: DATABASE_URL
@@ -51,7 +39,6 @@ services:
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: ./frontend/dist
     plan: free
-    region: oregon
 
     headers:
       - path: /assets/*
@@ -62,16 +49,13 @@ services:
         value: public, max-age=3600
 
     routes:
-      # SPA-style routing: unknown paths fall back to index.html
+      # Serve dashboard.html for /dashboard (without .html extension)
       - type: rewrite
         source: /dashboard
         destination: /dashboard.html
-      - type: rewrite
-        source: /dashboard.html
-        destination: /dashboard.html
 
     envVars:
-      # REQUIRED after backend first deploys:
-      # Set to https://cpa-ai-agent-backend.onrender.com
+      # REQUIRED after backend deploys — set to your backend URL:
+      # https://cpa-ai-agent-backend.onrender.com
       - key: VITE_API_URL
         sync: false
