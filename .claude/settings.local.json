@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python.exe -c \"from pydantic_settings import BaseSettings; print\\('pydantic-settings already installed'\\)\")",
+      "Bash(uv run:*)",
+      "Bash(docker build:*)"
+    ]
+  }
+}

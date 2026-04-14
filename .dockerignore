@@ -1,0 +1,39 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Node
+frontend/node_modules/
+frontend/.vite/
+
+# Data / secrets
+.env
+.env.*
+!.env.example
+cpa_agent.db
+input_docs/*.pdf
+output_reports/
+
+# Dev tools
+.qwen/
+.cache/
+stitch_export/
+tests/
+
+# VCS
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp

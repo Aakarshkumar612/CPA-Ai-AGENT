@@ -1,0 +1,31 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Environment secrets
+.env
+.env.local
+
+# Database
+*.db
+*.sqlite
+
+# Caches
+.cache/
+.qwen/
+
+# Frontend build output
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Output data
+output_reports/
+input_docs/*.pdf

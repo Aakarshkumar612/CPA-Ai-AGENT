@@ -1,0 +1,77 @@
+## render.yaml — Deploy CPA AI Agent on Render
+## Docs: https://render.com/docs/blueprint-spec
+##
+## Two deployment modes for the backend:
+##   A) Docker (default, below) — exact image, self-contained
+##   B) Native Python — lighter, faster cold-starts on Render
+##      Switch by uncommenting the native-python block and commenting Docker block.
+##
+## Deploy steps:
+##   1. Push repo to GitHub
+##   2. Connect repo in Render dashboard → "New Blueprint"
+##   3. Set GROQ_API_KEY and APIFY_API_TOKEN in Render dashboard
+##   4. After backend deploys, set VITE_API_URL on the frontend service
+##      to https://cpa-ai-agent-backend.onrender.com and redeploy frontend
+
+services:
+
+  # ── Backend: FastAPI (Docker) ─────────────────────────────────────────────
+  - type: web
+    name: cpa-ai-agent-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter           # $7/mo — needed for persistent disk
+    region: oregon
+
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false           # Required — set in Render dashboard
+      - key: APIFY_API_TOKEN
+        sync: false           # Optional — set false if using mock mode
+      - key: USE_MOCK_APIFY
+        value: "true"         # Change to false once APIFY_API_TOKEN is set
+      - key: DATABASE_URL
+        value: sqlite:////app/data/cpa_agent.db
+      - key: LOG_LEVEL
+        value: info
+      - key: PYTHONUNBUFFERED
+        value: "1"
+
+    disk:
+      name: cpa-data
+      mountPath: /app/data    # persists DB + output_reports across deploys
+      sizeGB: 1
+
+    healthCheckPath: /api/health
+
+  # ── Frontend: Static Site (Vite build) ────────────────────────────────────
+  - type: web
+    name: cpa-ai-agent-frontend
+    runtime: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    plan: free
+    region: oregon
+
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=3600
+
+    routes:
+      # SPA-style routing: unknown paths fall back to index.html
+      - type: rewrite
+        source: /dashboard
+        destination: /dashboard.html
+      - type: rewrite
+        source: /dashboard.html
+        destination: /dashboard.html
+
+    envVars:
+      # REQUIRED after backend first deploys:
+      # Set to https://cpa-ai-agent-backend.onrender.com
+      - key: VITE_API_URL
+        sync: false

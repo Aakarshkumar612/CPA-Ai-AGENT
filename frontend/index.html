@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CPA AI Agent — Sovereign Freight Auditing</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          "tertiary-fixed": "#6bff8f", "outline-variant": "#48474d", "tertiary-fixed-dim": "#5bf083",
+          "secondary-dim": "#d4d2e8", "surface-dim": "#0e0e13", "inverse-surface": "#fcf8ff",
+          "on-error": "#490013", "tertiary-container": "#6bff8f", "primary-dim": "#675df9",
+          "on-primary": "#1e009f", "tertiary-dim": "#5bf083", "surface-container-highest": "#25252d",
+          "secondary-container": "#464557", "on-secondary-container": "#d0cee4",
+          "on-primary-fixed-variant": "#1d0098", "inverse-on-surface": "#55545b",
+          "on-secondary-fixed-variant": "#5a5a6c", "tertiary": "#c5ffc9",
+          "primary-container": "#9995ff", "on-secondary": "#515062", "primary": "#a8a4ff",
+          "on-tertiary-container": "#005f28", "on-tertiary-fixed": "#004a1d",
+          "surface-container-high": "#1f1f26", "on-primary-container": "#16007d",
+          "primary-fixed-dim": "#8a85ff", "secondary-fixed": "#e3e0f7", "background": "#0e0e13",
+          "inverse-primary": "#5044e3", "error-container": "#a70138", "surface-bright": "#2c2b33",
+          "surface": "#0e0e13", "on-surface-variant": "#acaab1", "on-primary-fixed": "#000000",
+          "surface-tint": "#a8a4ff", "on-background": "#f9f5fd", "error": "#ff6e84",
+          "error-dim": "#d73357", "secondary": "#e3e0f7", "on-tertiary": "#00692c",
+          "primary-fixed": "#9995ff", "surface-variant": "#25252d", "surface-container": "#19191f",
+          "surface-container-lowest": "#000000", "surface-container-low": "#131319",
+          "on-tertiary-fixed-variant": "#006a2d", "on-secondary-fixed": "#3e3e4f",
+          "outline": "#76747b", "on-error-container": "#ffb2b9", "on-surface": "#f9f5fd",
+          "secondary-fixed-dim": "#d4d2e8"
+        },
+        borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "2xl": "1rem", "3xl": "1.5rem", "full": "9999px" },
+        fontFamily: { "headline": ["Inter"], "body": ["Inter"], "label": ["JetBrains Mono"] }
+      }
+    }
+  }
+</script>
+<style>
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  .glass-panel { background: rgba(14,14,19,0.6); backdrop-filter: blur(20px); }
+  .particle-bg {
+    position: absolute; width: 100%; height: 100%; z-index: -1;
+    background-image: radial-gradient(circle at 2px 2px, rgba(168,164,255,0.15) 1px, transparent 0);
+    background-size: 40px 40px;
+  }
+</style>
+</head>
+<body class="bg-background text-on-background font-body selection:bg-primary-container selection:text-on-primary-container overflow-x-hidden">
+
+<!-- Top Navigation Bar -->
+<header class="fixed top-0 w-full z-50 bg-[#0e0e13]/60 backdrop-blur-xl flex justify-between items-center px-8 h-16 shadow-[0_40px_60px_-15px_rgba(168,164,255,0.08)]">
+  <div class="text-xl font-bold tracking-tighter text-[#a8a4ff] font-headline">CPA AI Agent</div>
+  <nav class="hidden md:flex items-center gap-8 font-['Inter'] font-bold tracking-tight">
+    <a class="text-[#a8a4ff] border-b-2 border-[#a8a4ff] pb-1" href="#">Home</a>
+    <a class="text-slate-400 font-medium hover:text-[#a8a4ff] transition-colors duration-200" href="/dashboard.html">Dashboard</a>
+    <a class="text-slate-400 font-medium hover:text-[#a8a4ff] transition-colors duration-200" href="#features">Features</a>
+    <a class="text-slate-400 font-medium hover:text-[#a8a4ff] transition-colors duration-200" href="#pipeline">Pipeline</a>
+  </nav>
+  <div class="flex items-center gap-4">
+    <a href="/dashboard.html" class="bg-primary hover:bg-primary-dim text-on-primary px-5 py-2 rounded-xl text-sm font-bold transition-all active:scale-95">Open Dashboard</a>
+  </div>
+</header>
+
+<main class="pt-16">
+  <!-- Hero Section -->
+  <section class="relative min-h-[921px] flex flex-col items-center justify-center text-center px-6 overflow-hidden">
+    <div class="particle-bg"></div>
+    <div class="mb-6 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-surface-container-high border border-outline-variant/20 shadow-xl">
+      <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+      <span class="text-[10px] font-label uppercase tracking-widest text-on-surface-variant">Powered by LLaMA 3.3 · Docling · LangGraph</span>
+    </div>
+    <h1 class="max-w-4xl text-5xl md:text-7xl font-black font-headline tracking-tighter mb-8 leading-[1.1]">
+      Stop Overpaying on <br/>
+      <span class="bg-clip-text text-transparent bg-gradient-to-r from-primary via-primary-container to-tertiary">Freight Invoices</span>
+    </h1>
+    <p class="max-w-2xl text-on-surface-variant text-lg mb-12 font-medium">
+      Autonomous freight auditing that finds discrepancies humans miss. Sovereignty over your logistics spend via enterprise-grade AI logic.
+    </p>
+    <div class="flex flex-col sm:flex-row gap-4 mb-20">
+      <a href="/dashboard.html" class="bg-gradient-to-r from-primary-dim to-primary text-on-primary px-8 py-4 rounded-3xl font-bold text-lg shadow-[0_20px_40px_-10px_rgba(168,164,255,0.3)] hover:scale-105 transition-transform">Get Started</a>
+      <a href="#pipeline" class="bg-surface-container-highest text-on-surface px-8 py-4 rounded-3xl font-bold text-lg border border-outline-variant/10 hover:bg-surface-bright transition-colors">View Pipeline</a>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl w-full px-4">
+      <div class="p-6 rounded-2xl bg-surface-container-low border border-outline-variant/10 flex flex-col items-center">
+        <span class="text-3xl font-black font-label text-primary">$12.4M</span>
+        <span class="text-[10px] uppercase tracking-widest font-label text-on-surface-variant mt-2">Recovered Leakage</span>
+      </div>
+      <div class="p-6 rounded-2xl bg-surface-container-low border border-outline-variant/10 flex flex-col items-center">
+        <span class="text-3xl font-black font-label text-tertiary">99.8%</span>
+        <span class="text-[10px] uppercase tracking-widest font-label text-on-surface-variant mt-2">Audit Accuracy</span>
+      </div>
+      <div class="p-6 rounded-2xl bg-surface-container-low border border-outline-variant/10 flex flex-col items-center">
+        <span class="text-3xl font-black font-label text-secondary">0.4s</span>
+        <span class="text-[10px] uppercase tracking-widest font-label text-on-surface-variant mt-2">Mean Analysis Time</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Problem / Solution -->
+  <section class="py-24 px-8 max-w-7xl mx-auto">
+    <div class="grid md:grid-cols-2 gap-12 items-stretch">
+      <div class="bg-surface-container-low rounded-[2.5rem] p-10 border border-error/5 relative overflow-hidden group">
+        <div class="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+          <span class="material-symbols-outlined text-[120px] text-error">warning</span>
+        </div>
+        <div class="relative z-10">
+          <div class="w-12 h-12 rounded-2xl bg-error-container/20 flex items-center justify-center mb-6">
+            <span class="material-symbols-outlined text-error">report</span>
+          </div>
+          <h3 class="text-3xl font-bold font-headline mb-6 tracking-tight">The Problem</h3>
+          <p class="text-on-surface-variant mb-8 text-lg">Traditional freight auditing is manual, reactive, and riddled with expensive errors.</p>
+          <ul class="space-y-4">
+            <li class="flex items-start gap-3"><span class="material-symbols-outlined text-error text-sm mt-1">close</span><span class="text-on-surface font-medium">Duplicate billings hidden across multiple PDF versions.</span></li>
+            <li class="flex items-start gap-3"><span class="material-symbols-outlined text-error text-sm mt-1">close</span><span class="text-on-surface font-medium">Fuel surcharges that don't match weekly DOT rates.</span></li>
+            <li class="flex items-start gap-3"><span class="material-symbols-outlined text-error text-sm mt-1">close</span><span class="text-on-surface font-medium">Accessorial charges applied without actual service delivery.</span></li>
+          </ul>
+        </div>
+      </div>
+      <div class="bg-surface-container-low rounded-[2.5rem] p-10 border border-primary/5 relative overflow-hidden group">
+        <div class="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+          <span class="material-symbols-outlined text-[120px] text-primary">auto_awesome</span>
+        </div>
+        <div class="relative z-10">
+          <div class="w-12 h-12 rounded-2xl bg-primary-container/20 flex items-center justify-center mb-6">
+            <span class="material-symbols-outlined text-primary">verified</span>
+          </div>
+          <h3 class="text-3xl font-bold font-headline mb-6 tracking-tight">The Solution</h3>
+          <p class="text-on-surface-variant mb-8 text-lg">CPA AI Agent acts as an autonomous auditor, processing thousands of documents in seconds.</p>
+          <ul class="space-y-4">
+            <li class="flex items-start gap-3"><span class="material-symbols-outlined text-tertiary text-sm mt-1">check_circle</span><span class="text-on-surface font-medium">Docling extraction with zero OCR character loss.</span></li>
+            <li class="flex items-start gap-3"><span class="material-symbols-outlined text-tertiary text-sm mt-1">check_circle</span><span class="text-on-surface font-medium">Real-time benchmarking against lane-specific indices.</span></li>
+            <li class="flex items-start gap-3"><span class="material-symbols-outlined text-tertiary text-sm mt-1">check_circle</span><span class="text-on-surface font-medium">Automated dispute generation for carrier overcharges.</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pipeline Diagram -->
+  <section id="pipeline" class="py-24 bg-surface-container-low/50">
+    <div class="max-w-7xl mx-auto px-8">
+      <div class="text-center mb-16">
+        <h2 class="text-4xl font-black font-headline tracking-tighter mb-4">Autonomous Intelligence Pipeline</h2>
+        <p class="text-on-surface-variant font-label text-sm uppercase tracking-widest">How the sovereign auditor thinks</p>
+      </div>
+      <div class="relative overflow-x-auto pb-12">
+        <div class="flex items-center justify-between min-w-[1000px] px-4">
+          <div class="flex flex-col items-center gap-4 w-32">
+            <div class="w-16 h-16 rounded-full bg-surface-container-highest flex items-center justify-center border border-outline-variant/20 shadow-lg"><span class="material-symbols-outlined text-primary">upload_file</span></div>
+            <span class="font-bold text-xs font-label">Ingestion</span>
+          </div>
+          <svg class="w-16 h-4 text-outline-variant/30" viewBox="0 0 64 16"><path d="M0 8H60M60 8L52 0M60 8L52 16" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <div class="flex flex-col items-center gap-4 w-32">
+            <div class="w-16 h-16 rounded-full bg-surface-container-highest flex items-center justify-center border border-outline-variant/20 shadow-lg"><span class="material-symbols-outlined text-primary">data_exploration</span></div>
+            <span class="font-bold text-xs font-label">Extraction</span>
+          </div>
+          <svg class="w-16 h-4 text-outline-variant/30" viewBox="0 0 64 16"><path d="M0 8H60M60 8L52 0M60 8L52 16" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <div class="flex flex-col items-center gap-4 w-32">
+            <div class="w-16 h-16 rounded-full bg-surface-container-highest flex items-center justify-center border border-outline-variant/20 shadow-lg"><span class="material-symbols-outlined text-primary">database</span></div>
+            <span class="font-bold text-xs font-label">Storage</span>
+          </div>
+          <svg class="w-16 h-4 text-outline-variant/30" viewBox="0 0 64 16"><path d="M0 8H60M60 8L52 0M60 8L52 16" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <div class="flex flex-col items-center gap-4 w-32">
+            <div class="w-16 h-16 rounded-full bg-surface-container-highest flex items-center justify-center border border-outline-variant/20 shadow-lg"><span class="material-symbols-outlined text-primary">query_stats</span></div>
+            <span class="font-bold text-xs font-label">Benchmarking</span>
+          </div>
+          <svg class="w-16 h-4 text-outline-variant/30" viewBox="0 0 64 16"><path d="M0 8H60M60 8L52 0M60 8L52 16" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <div class="flex flex-col items-center gap-4 w-32">
+            <div class="w-16 h-16 rounded-full bg-surface-container-highest flex items-center justify-center border border-outline-variant/20 shadow-lg"><span class="material-symbols-outlined text-primary">psychology</span></div>
+            <span class="font-bold text-xs font-label">Analysis</span>
+          </div>
+          <svg class="w-16 h-4 text-outline-variant/30" viewBox="0 0 64 16"><path d="M0 8H60M60 8L52 0M60 8L52 16" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <div class="flex flex-col items-center gap-4 w-32">
+            <div class="w-20 h-20 rounded-full bg-primary-container flex items-center justify-center shadow-[0_0_40px_rgba(168,164,255,0.4)]"><span class="material-symbols-outlined text-on-primary-container text-3xl">task</span></div>
+            <span class="font-bold text-xs font-label text-primary">Report</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Grid -->
+  <section id="features" class="py-24 max-w-7xl mx-auto px-8">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div class="p-8 rounded-[2rem] bg-surface-container border border-outline-variant/5 hover:border-primary/20 transition-all duration-300 group">
+        <div class="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center mb-6 group-hover:scale-110 transition-transform"><span class="material-symbols-outlined text-primary">content_copy</span></div>
+        <h4 class="text-xl font-bold mb-3 font-headline">Duplicate Detection</h4>
+        <p class="text-on-surface-variant text-sm leading-relaxed">Agent identifies exact and semantic invoice matches across multiple carriers and regions.</p>
+      </div>
+      <div class="p-8 rounded-[2rem] bg-surface-container border border-outline-variant/5 hover:border-primary/20 transition-all duration-300 group">
+        <div class="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center mb-6 group-hover:scale-110 transition-transform"><span class="material-symbols-outlined text-primary">insights</span></div>
+        <h4 class="text-xl font-bold mb-3 font-headline">Live Benchmarking</h4>
+        <p class="text-on-surface-variant text-sm leading-relaxed">Instant comparison against DAT, Freightos, and historical lane rates for every shipment.</p>
+      </div>
+      <div class="p-8 rounded-[2rem] bg-surface-container border border-outline-variant/5 hover:border-primary/20 transition-all duration-300 group">
+        <div class="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center mb-6 group-hover:scale-110 transition-transform"><span class="material-symbols-outlined text-primary">neurology</span></div>
+        <h4 class="text-xl font-bold mb-3 font-headline">LLM Extraction</h4>
+        <p class="text-on-surface-variant text-sm leading-relaxed">Llama 3.3 handles unstructured invoice text and complex accessorial descriptions.</p>
+      </div>
+      <div class="p-8 rounded-[2rem] bg-surface-container border border-outline-variant/5 hover:border-primary/20 transition-all duration-300 group">
+        <div class="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center mb-6 group-hover:scale-110 transition-transform"><span class="material-symbols-outlined text-primary">cached</span></div>
+        <h4 class="text-xl font-bold mb-3 font-headline">Docling Cache</h4>
+        <p class="text-on-surface-variant text-sm leading-relaxed">High-speed retrieval for recurring bill formats and high-volume carrier portals.</p>
+      </div>
+      <div class="p-8 rounded-[2rem] bg-surface-container border border-outline-variant/5 hover:border-primary/20 transition-all duration-300 group">
+        <div class="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center mb-6 group-hover:scale-110 transition-transform"><span class="material-symbols-outlined text-primary">summarize</span></div>
+        <h4 class="text-xl font-bold mb-3 font-headline">CPA Reports</h4>
+        <p class="text-on-surface-variant text-sm leading-relaxed">Exportable general ledger adjustments and tax-compliant audit trails.</p>
+      </div>
+      <div class="p-8 rounded-[2rem] bg-surface-container border border-outline-variant/5 hover:border-primary/20 transition-all duration-300 group">
+        <div class="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center mb-6 group-hover:scale-110 transition-transform"><span class="material-symbols-outlined text-primary">interactive_space</span></div>
+        <h4 class="text-xl font-bold mb-3 font-headline">Human Feedback</h4>
+        <p class="text-on-surface-variant text-sm leading-relaxed">The Agent learns from every manual intervention to improve extraction confidence.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Banner -->
+  <section class="py-24 px-8 max-w-7xl mx-auto">
+    <div class="relative bg-surface-container-low p-1 rounded-[3rem] overflow-hidden group">
+      <div class="absolute inset-0 bg-gradient-to-r from-primary/30 to-tertiary/30 animate-pulse"></div>
+      <div class="relative bg-background rounded-[2.9rem] py-16 px-12 text-center">
+        <h2 class="text-4xl md:text-5xl font-black font-headline tracking-tighter mb-6">Ready to audit your first invoice?</h2>
+        <p class="text-on-surface-variant text-lg mb-10 max-w-2xl mx-auto">Upload a batch of invoices and watch the AI find savings in minutes. No complex integration required.</p>
+        <a href="/dashboard.html" class="inline-block bg-primary hover:bg-primary-dim text-on-primary px-10 py-5 rounded-2xl font-black text-xl transition-all shadow-2xl hover:shadow-primary/20 active:scale-95">Open Dashboard</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="bg-[#0e0e13] w-full border-t border-[#25252d]/15 flex flex-col md:flex-row justify-between items-center px-12 py-8">
+  <div class="text-sm font-bold text-slate-500 font-headline mb-4 md:mb-0">CPA AI Agent</div>
+  <div class="flex gap-8 mb-6 md:mb-0 font-['JetBrains_Mono'] text-[10px] uppercase tracking-widest">
+    <a class="text-slate-500 hover:text-white transition-colors" href="#">Privacy Policy</a>
+    <a class="text-slate-500 hover:text-white transition-colors" href="#">Terms of Service</a>
+    <a class="text-slate-500 hover:text-white transition-colors" href="#">Security Architecture</a>
+  </div>
+  <div class="font-['JetBrains_Mono'] text-[10px] uppercase tracking-widest text-[#a8a4ff]">© 2024 CPA AI Agent. All rights reserved.</div>
+</footer>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
