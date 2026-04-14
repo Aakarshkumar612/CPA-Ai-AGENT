@@ -78,9 +78,9 @@
   <div class="flex items-center gap-8">
     <a href="/index.html" class="text-xl font-bold tracking-tighter text-[#a8a4ff] font-['Inter']">CPA AI Agent</a>
     <nav class="hidden md:flex items-center gap-6">
-      <a class="text-[#a8a4ff] border-b-2 border-[#a8a4ff] pb-1 font-['Inter'] font-bold tracking-tight" href="#">Dashboard</a>
-      <a class="text-slate-400 font-medium hover:text-[#a8a4ff] transition-colors" href="#">Ledger</a>
-      <a class="text-slate-400 font-medium hover:text-[#a8a4ff] transition-colors" href="#">Audit Logs</a>
+      <a class="text-[#a8a4ff] border-b-2 border-[#a8a4ff] pb-1 font-['Inter'] font-bold tracking-tight cursor-pointer" data-nav="overview">Dashboard</a>
+      <a class="text-slate-400 font-medium hover:text-[#a8a4ff] transition-colors cursor-pointer" data-nav="ledger">Ledger</a>
+      <a class="text-slate-400 font-medium hover:text-[#a8a4ff] transition-colors cursor-pointer" data-nav="audit-logs">Audit Logs</a>
     </nav>
   </div>
   <div class="flex items-center gap-4">
@@ -776,36 +776,70 @@
   </nav>
 </footer>
 
-<!-- Chat Bubble -->
-<div id="chat-bubble" class="fixed bottom-[6.5rem] left-1/2 -translate-x-1/2 w-full max-w-xl px-4 z-50">
-  <div class="glass-panel rounded-2xl p-4 border border-white/10 shadow-2xl">
-    <div class="flex items-start gap-3">
-      <div class="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
-        <span class="material-symbols-outlined text-primary text-sm">smart_toy</span>
-      </div>
-      <div class="flex-1">
-        <p id="chat-bubble-text" class="text-sm text-on-surface leading-relaxed"></p>
-      </div>
-      <button id="chat-bubble-close" class="text-slate-500 hover:text-white shrink-0">
-        <span class="material-symbols-outlined text-sm">close</span>
-      </button>
+<!-- ═══════════════════════════════════════════════
+     FLOATING CHATBOT WIDGET
+════════════════════════════════════════════════ -->
+
+<!-- Chat window (hidden by default) -->
+<div id="chat-window" class="fixed bottom-24 right-6 z-[300] w-[360px] flex flex-col rounded-2xl overflow-hidden shadow-2xl border border-white/10 transition-all duration-300 origin-bottom-right"
+     style="background:#131319; max-height:520px; transform:scale(0.9) translateY(20px); opacity:0; pointer-events:none;">
+
+  <!-- Header -->
+  <div class="flex items-center gap-3 px-4 py-3 bg-[#0e0e13] border-b border-white/5 shrink-0">
+    <div class="w-8 h-8 rounded-xl bg-primary flex items-center justify-center text-on-primary shrink-0">
+      <span class="material-symbols-outlined text-[18px]">smart_toy</span>
     </div>
+    <div class="flex-1 min-w-0">
+      <p class="text-sm font-bold text-on-surface font-['Inter']">Sovereign Assistant</p>
+      <p class="text-[10px] text-tertiary-fixed font-mono uppercase tracking-wider">CPA AI Agent · Online</p>
+    </div>
+    <button id="chat-clear-btn" title="Clear chat" class="text-slate-500 hover:text-slate-300 transition-colors">
+      <span class="material-symbols-outlined text-[18px]">delete_sweep</span>
+    </button>
+    <button id="chat-close-btn" class="text-slate-500 hover:text-white transition-colors">
+      <span class="material-symbols-outlined text-[20px]">close</span>
+    </button>
+  </div>
+
+  <!-- Messages -->
+  <div id="chat-messages" class="flex-1 overflow-y-auto px-4 py-4 space-y-4 no-scrollbar" style="min-height:0"></div>
+
+  <!-- FAQ Chips -->
+  <div id="chat-faq-chips" class="px-4 pb-2 flex flex-wrap gap-1.5">
+    <button class="faq-chip text-[10px] px-2.5 py-1 rounded-full bg-surface-container-highest text-slate-400 hover:text-primary hover:bg-primary/10 transition-all font-mono border border-white/5">What is this?</button>
+    <button class="faq-chip text-[10px] px-2.5 py-1 rounded-full bg-surface-container-highest text-slate-400 hover:text-primary hover:bg-primary/10 transition-all font-mono border border-white/5">How to run audit?</button>
+    <button class="faq-chip text-[10px] px-2.5 py-1 rounded-full bg-surface-container-highest text-slate-400 hover:text-primary hover:bg-primary/10 transition-all font-mono border border-white/5">Invoice count</button>
+    <button class="faq-chip text-[10px] px-2.5 py-1 rounded-full bg-surface-container-highest text-slate-400 hover:text-primary hover:bg-primary/10 transition-all font-mono border border-white/5">Pipeline status</button>
+    <button class="faq-chip text-[10px] px-2.5 py-1 rounded-full bg-surface-container-highest text-slate-400 hover:text-primary hover:bg-primary/10 transition-all font-mono border border-white/5">What are anomalies?</button>
+    <button class="faq-chip text-[10px] px-2.5 py-1 rounded-full bg-surface-container-highest text-slate-400 hover:text-primary hover:bg-primary/10 transition-all font-mono border border-white/5">How to upload PDF?</button>
+    <button class="faq-chip text-[10px] px-2.5 py-1 rounded-full bg-surface-container-highest text-slate-400 hover:text-primary hover:bg-primary/10 transition-all font-mono border border-white/5">API status</button>
+    <button class="faq-chip text-[10px] px-2.5 py-1 rounded-full bg-surface-container-highest text-slate-400 hover:text-primary hover:bg-primary/10 transition-all font-mono border border-white/5">What is Ledger?</button>
+  </div>
+
+  <!-- Input -->
+  <div class="flex items-center gap-2 px-3 py-3 bg-[#0e0e13] border-t border-white/5 shrink-0">
+    <input
+      id="chat-input"
+      type="text"
+      autocomplete="off"
+      placeholder="Ask anything about your audits…"
+      class="flex-1 bg-surface-container-highest rounded-xl px-3 py-2 text-sm text-on-surface placeholder:text-slate-500 outline-none border border-white/5 focus:border-primary/30 transition-colors"
+    />
+    <button id="chat-send-btn"
+      class="w-9 h-9 rounded-xl bg-primary text-on-primary flex items-center justify-center hover:brightness-110 active:scale-95 transition-all shrink-0">
+      <span class="material-symbols-outlined text-[18px]">send</span>
+    </button>
   </div>
 </div>
 
-<!-- AI Command Bar -->
-<div class="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-xl px-4 z-50">
-  <div class="glass-panel rounded-2xl p-2 border border-white/10 shadow-2xl flex items-center gap-3">
-    <div class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-on-primary">
-      <span class="material-symbols-outlined">auto_awesome</span>
-    </div>
-    <input id="ai-command-input" class="flex-1 bg-transparent border-none focus:ring-0 text-sm placeholder:text-slate-500 text-on-surface" placeholder="Ask Agent Sovereign to audit a specific vendor or run a strategy…" type="text"/>
-    <div class="flex gap-1 pr-2">
-      <kbd class="px-2 py-1 bg-surface-container-highest rounded text-[10px] font-mono text-slate-400">⌘</kbd>
-      <kbd class="px-2 py-1 bg-surface-container-highest rounded text-[10px] font-mono text-slate-400">K</kbd>
-    </div>
-  </div>
-</div>
+<!-- Floating Chat Toggle Button -->
+<button id="chat-toggle-btn"
+  class="fixed bottom-6 right-6 z-[300] w-14 h-14 rounded-full bg-primary text-on-primary shadow-lg shadow-primary/30 flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
+  title="Open Assistant">
+  <span id="chat-toggle-icon" class="material-symbols-outlined text-[24px]">chat</span>
+  <!-- Unread badge -->
+  <span id="chat-unread-badge" class="hidden absolute -top-1 -right-1 w-5 h-5 rounded-full bg-error text-white text-[10px] font-bold flex items-center justify-center">1</span>
+</button>
 
 <script type="module" src="/src/dashboard.ts"></script>
 </body>

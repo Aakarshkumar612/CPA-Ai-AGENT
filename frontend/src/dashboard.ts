@@ -506,7 +506,7 @@ async function loadLedger(): Promise<void> {
   if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="px-6 py-8 text-slate-500 text-xs text-center animate-pulse">Loading ledger…</td></tr>`;
 
   try {
-    const data = await api.invoices(1, 200);
+    const data = await api.invoices(1, 100);
     const invoices = data.invoices;
 
     if (!tbody) return;
@@ -779,108 +779,211 @@ async function loadNotifications(): Promise<void> {
 
 // ── Help Chatbot ──────────────────────────────────────────────────────────────
 
-let chatHideTimer: ReturnType<typeof setTimeout> | null = null;
+let chatOpen = false;
+let chatUnread = 0;
 
-function showChatBubble(text: string): void {
-  const bubble = document.getElementById('chat-bubble');
-  const textEl = document.getElementById('chat-bubble-text');
-  if (!bubble || !textEl) return;
-
-  textEl.textContent = text;
-  bubble.classList.add('visible');
-
-  if (chatHideTimer) clearTimeout(chatHideTimer);
-  chatHideTimer = setTimeout(() => hideChatBubble(), 8000);
+function openChat(): void {
+  chatOpen = true;
+  const win = document.getElementById('chat-window');
+  if (win) {
+    win.style.opacity = '1';
+    win.style.transform = 'scale(1) translateY(0)';
+    win.style.pointerEvents = 'auto';
+  }
+  const icon = document.getElementById('chat-toggle-icon');
+  if (icon) icon.textContent = 'close';
+  chatUnread = 0;
+  updateChatBadge();
+  setTimeout(() => (document.getElementById('chat-input') as HTMLInputElement | null)?.focus(), 150);
 }
 
-function hideChatBubble(): void {
-  document.getElementById('chat-bubble')?.classList.remove('visible');
+function closeChat(): void {
+  chatOpen = false;
+  const win = document.getElementById('chat-window');
+  if (win) {
+    win.style.opacity = '0';
+    win.style.transform = 'scale(0.9) translateY(20px)';
+    win.style.pointerEvents = 'none';
+  }
+  const icon = document.getElementById('chat-toggle-icon');
+  if (icon) icon.textContent = 'chat';
 }
 
-async function handleChatCommand(raw: string): Promise<void> {
-  const cmd = raw.trim().toLowerCase();
+function clearChat(): void {
+  const msgs = document.getElementById('chat-messages');
+  if (msgs) msgs.innerHTML = '';
+  document.getElementById('chat-faq-chips')?.classList.remove('hidden');
+  addBotMessage("Chat cleared. How can I help you?");
+}
 
-  if (cmd === 'help' || cmd === '?') {
-    showChatBubble('Commands: "run pipeline", "show vendors", "invoice count", "critical anomalies", "go to [section]", "clear cache", "api status".');
+function updateChatBadge(): void {
+  const badge = document.getElementById('chat-unread-badge');
+  if (!badge) return;
+  if (chatUnread > 0 && !chatOpen) {
+    badge.textContent = String(chatUnread);
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+function addBotMessage(html: string): void {
+  const msgs = document.getElementById('chat-messages');
+  if (!msgs) return;
+  const div = document.createElement('div');
+  div.className = 'flex gap-2 items-start';
+  div.innerHTML = `
+    <div class="w-6 h-6 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center flex-shrink-0 mt-0.5" style="font-size:9px;color:#a8a4ff">AI</div>
+    <div class="rounded-2xl rounded-tl-sm px-3 py-2 text-xs text-slate-200 leading-relaxed" style="background:#1e1e28;max-width:82%">${html}</div>
+  `;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  if (!chatOpen) {
+    chatUnread++;
+    updateChatBadge();
+  }
+}
+
+function addUserMessage(text: string): void {
+  const msgs = document.getElementById('chat-messages');
+  if (!msgs) return;
+  document.getElementById('chat-faq-chips')?.classList.add('hidden');
+  const div = document.createElement('div');
+  div.className = 'flex gap-2 items-start justify-end';
+  div.innerHTML = `
+    <div class="rounded-2xl rounded-tr-sm px-3 py-2 text-xs leading-relaxed" style="background:rgba(168,164,255,0.15);color:#c5c2ff;max-width:82%;border:1px solid rgba(168,164,255,0.2)">${text}</div>
+  `;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+async function handleChatMessage(raw: string): Promise<void> {
+  const text = raw.trim();
+  if (!text) return;
+  addUserMessage(text);
+  const cmd = text.toLowerCase();
+
+  // What is this / about
+  if (cmd.includes('what is this') || cmd.includes('what is cpa') || cmd.includes('about') || cmd === 'overview') {
+    addBotMessage('CPA AI Agent is an intelligent invoice auditing system. It uses AI to extract data from PDF invoices, detect pricing anomalies, flag compliance issues, and generate detailed audit reports — automatically.');
     return;
   }
 
-  if (cmd === 'run pipeline' || cmd === 'run audit' || cmd === 'start pipeline') {
-    showChatBubble('Starting pipeline… switching to AI Auditor.');
-    await startPipeline();
+  // How to run audit / pipeline
+  if (cmd.includes('how to run') || cmd.includes('run audit') || cmd.includes('start audit') || cmd.includes('run pipeline') || cmd.includes('start pipeline')) {
+    addBotMessage('To run an audit:<br>1. Go to <b>AI Auditor</b> in the sidebar.<br>2. Upload PDF invoices via the upload area.<br>3. Click <b>Run Full Pipeline</b>.<br>Results appear in Entities and Ledger sections once complete.');
     return;
   }
 
-  if (cmd === 'show vendors' || cmd === 'vendors') {
-    showChatBubble('Switching to Overview — see the vendor spend chart.');
-    switchSection('overview');
+  // Upload / PDF
+  if (cmd.includes('upload') || cmd.includes('how to upload') || cmd.includes('pdf')) {
+    addBotMessage('Go to the <b>AI Auditor</b> section and use the drag-and-drop area to upload PDF invoices. Multiple files supported. After uploading, click <b>Run Full Pipeline</b> to start analysis.');
     return;
   }
 
-  if (cmd === 'invoice count' || cmd === 'invoices' || cmd === 'count') {
+  // Anomalies
+  if (cmd.includes('anomal') || cmd.includes('what are anomalies') || cmd.includes('what are flags')) {
+    addBotMessage('Anomalies are irregularities detected in invoice data. Types include: overpriced routes, duplicate charges, missing required fields, currency mismatches, and amounts exceeding thresholds.<br><br>Severities: <b>Critical → High → Medium → Low</b>');
+    return;
+  }
+
+  // Ledger
+  if (cmd.includes('ledger') || cmd.includes('what is ledger') || cmd.includes('accounting')) {
+    addBotMessage('The <b>Ledger</b> shows all extracted invoices in an accounting-style table — vendor, date, amount, currency, and audit status. Use it to review individual invoice records and track processing state.');
+    return;
+  }
+
+  // Pipeline status
+  if (cmd.includes('pipeline status') || cmd === 'pipeline') {
     try {
-      const s = await api.status();
-      showChatBubble(`${s.invoices_in_db} invoices stored in the database.`);
+      const s = await api.pipelineStatus();
+      const started = s.started_at ? ` Started: ${new Date(s.started_at).toLocaleTimeString()}` : '';
+      const err = s.error ? `<br><span style="color:#ff6b6b">Error: ${s.error}</span>` : '';
+      addBotMessage(`Pipeline is <b>${s.status}</b>.${started}${err}`);
     } catch {
-      showChatBubble('Could not reach the API.');
+      addBotMessage('Could not fetch pipeline status. Is the backend running?');
     }
     return;
   }
 
-  if (cmd === 'critical anomalies' || cmd === 'critical' || cmd === 'anomalies') {
+  // Invoice count
+  if (cmd.includes('invoice count') || cmd.includes('how many') || cmd.includes('count invoices')) {
+    try {
+      const s = await api.status();
+      addBotMessage(`<b>${s.invoices_in_db}</b> invoices in the database. <b>${s.reports_generated}</b> audit reports generated.`);
+    } catch {
+      addBotMessage('Could not reach the API. Check that the backend is running on port 8000.');
+    }
+    return;
+  }
+
+  // Critical anomalies
+  if (cmd.includes('critical anomalies') || cmd.includes('critical flags') || cmd === 'critical') {
     try {
       const d = await api.dashboard();
       const crit = d.severity_breakdown.critical ?? 0;
       const high = d.severity_breakdown.high ?? 0;
-      showChatBubble(`${crit} critical anomaly${crit !== 1 ? 'ies' : ''} and ${high} high-severity flag${high !== 1 ? 's' : ''} detected.`);
+      addBotMessage(`<b>${crit} critical</b> and <b>${high} high-severity</b> anomalies detected across processed invoices.`);
     } catch {
-      showChatBubble('Could not fetch anomaly data.');
+      addBotMessage('Could not fetch anomaly data from the dashboard.');
     }
     return;
   }
 
-  if (cmd.startsWith('go to ') || cmd.startsWith('goto ') || cmd.startsWith('navigate to ')) {
-    const target = cmd.replace(/^(go to |goto |navigate to )/, '').trim();
+  // API status
+  if (cmd === 'api status' || cmd === 'api') {
+    try {
+      const s = await api.status();
+      const groq = s.groq_configured ? '✓' : '✗';
+      const mock = s.mock_mode ? 'on' : 'off';
+      addBotMessage(`API online. Groq: <b>${groq}</b> · Mock mode: <b>${mock}</b> · Pipeline: <b>${s.pipeline_status}</b> · Invoices: <b>${s.invoices_in_db}</b>`);
+    } catch {
+      addBotMessage('API appears to be unreachable. Check that the backend server is running.');
+    }
+    return;
+  }
+
+  // Navigate
+  if (cmd.startsWith('go to ') || cmd.startsWith('goto ') || cmd.startsWith('navigate to ') || cmd.startsWith('open ')) {
+    const target = cmd.replace(/^(go to |goto |navigate to |open )/, '').trim();
     const sectionMap: Record<string, Section> = {
-      overview: 'overview', dashboard: 'overview',
-      auditor: 'ai-auditor', 'ai auditor': 'ai-auditor', pipeline: 'ai-auditor',
+      overview: 'overview', dashboard: 'overview', home: 'overview',
+      auditor: 'ai-auditor', 'ai auditor': 'ai-auditor', pipeline: 'ai-auditor', audit: 'ai-auditor',
       entities: 'entities', invoices: 'entities',
       compliance: 'compliance',
       'api status': 'api-status', status: 'api-status', api: 'api-status',
       ledger: 'ledger',
-      'audit logs': 'audit-logs', logs: 'audit-logs',
+      'audit logs': 'audit-logs', logs: 'audit-logs', 'audit log': 'audit-logs',
     };
     const section = sectionMap[target];
     if (section) {
       switchSection(section);
-      showChatBubble(`Navigated to ${section}.`);
+      addBotMessage(`Navigated to <b>${section}</b>.`);
     } else {
-      showChatBubble(`Unknown section "${target}". Try: overview, auditor, entities, compliance, api status, ledger, audit logs.`);
+      addBotMessage(`Unknown section. Try: overview, auditor, entities, compliance, api status, ledger, or audit logs.`);
     }
     return;
   }
 
-  if (cmd === 'clear cache' || cmd === 'cache clear') {
+  // Clear cache
+  if (cmd.includes('clear cache') || cmd === 'cache') {
     try {
       const res = await api.clearCache();
-      showChatBubble(res.message);
+      addBotMessage(res.message);
     } catch {
-      showChatBubble('Cache clear failed — check API connectivity.');
+      addBotMessage('Cache clear failed — check API connectivity.');
     }
     return;
   }
 
-  if (cmd === 'api status' || cmd === 'status') {
-    try {
-      const s = await api.status();
-      showChatBubble(`API online. Groq: ${s.groq_configured ? 'OK' : 'missing'}. Mock mode: ${s.mock_mode ? 'on' : 'off'}. Pipeline: ${s.pipeline_status}.`);
-    } catch {
-      showChatBubble('API is unreachable.');
-    }
+  // Help
+  if (cmd === 'help' || cmd === '?') {
+    addBotMessage('Things I can help with:<br>• What is this? / About<br>• How to run an audit<br>• How to upload PDF<br>• What are anomalies?<br>• What is Ledger?<br>• Invoice count<br>• Pipeline status<br>• API status<br>• Navigate (e.g. "go to ledger")');
     return;
   }
 
-  showChatBubble(`Unknown command: "${raw}". Type "help" to see available commands.`);
+  // Fallback
+  addBotMessage(`I'm not sure about that. Try: <i>"What is this?"</i>, <i>"How to run audit?"</i>, <i>"Invoice count"</i>, or <i>"API status"</i>.`);
 }
 
 // ── Status polling ────────────────────────────────────────────────────────────
@@ -1012,19 +1115,36 @@ document.addEventListener('DOMContentLoaded', () => {
   // Ledger refresh button
   document.getElementById('ledger-refresh-btn')?.addEventListener('click', loadLedger);
 
-  // Chat bubble close
-  document.getElementById('chat-bubble-close')?.addEventListener('click', hideChatBubble);
-
-  // AI Command Bar
-  const aiInput = document.getElementById('ai-command-input') as HTMLInputElement | null;
-  aiInput?.addEventListener('keydown', async (e) => {
-    if (e.key === 'Enter') {
-      const val = aiInput.value.trim();
-      if (!val) return;
-      aiInput.value = '';
-      await handleChatCommand(val);
-    }
+  // Floating chat widget
+  document.getElementById('chat-toggle-btn')?.addEventListener('click', () => {
+    if (chatOpen) closeChat(); else openChat();
   });
+  document.getElementById('chat-close-btn')?.addEventListener('click', closeChat);
+  document.getElementById('chat-clear-btn')?.addEventListener('click', clearChat);
+
+  const chatInput = document.getElementById('chat-input') as HTMLInputElement | null;
+
+  const sendChatMessage = async () => {
+    const val = chatInput?.value.trim() ?? '';
+    if (!val) return;
+    if (chatInput) chatInput.value = '';
+    await handleChatMessage(val);
+  };
+
+  chatInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendChatMessage();
+  });
+  document.getElementById('chat-send-btn')?.addEventListener('click', sendChatMessage);
+
+  document.querySelectorAll<HTMLButtonElement>('.faq-chip').forEach((chip) => {
+    chip.addEventListener('click', async () => {
+      if (!chatOpen) openChat();
+      await handleChatMessage(chip.textContent?.trim() ?? '');
+    });
+  });
+
+  // Welcome message
+  addBotMessage("Hi! I'm the Sovereign Assistant. Ask me anything about this dashboard, or pick a question below.");
 
   // Boot log message
   appendLog('Sovereign Auditor online. System ready.', 'text-tertiary-fixed-dim opacity-80');
