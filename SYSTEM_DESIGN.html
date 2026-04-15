@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CPA AI Agent — System Design</title>
+<style>
+  /* ── Reset & Base ─────────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0d1117;
+    --surface:   #161b22;
+    --card:      #1c2333;
+    --border:    rgba(255,255,255,0.07);
+    --indigo:    #818cf8;
+    --indigo-d:  #6366f1;
+    --indigo-bg: rgba(129,140,248,0.1);
+    --amber:     #fbbf24;
+    --amber-d:   #f59e0b;
+    --amber-bg:  rgba(251,191,36,0.1);
+    --emerald:   #34d399;
+    --emerald-d: #10b981;
+    --emerald-bg:rgba(52,211,153,0.1);
+    --red:       #f87171;
+    --red-bg:    rgba(248,113,113,0.1);
+    --text:      #e2e8f0;
+    --muted:     #8b949e;
+    --faint:     #484f58;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  /* ── Scrollbar ─────────────────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--faint); border-radius: 3px; }
+
+  /* ── Sticky Nav ────────────────────────────────────────────────────────── */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(13,17,23,0.9);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 0; flex-wrap: wrap;
+    padding: 0 2rem;
+  }
+  .nav-brand {
+    font-size: 13px; font-weight: 700; color: var(--indigo);
+    letter-spacing: .05em; text-transform: uppercase; padding: 1rem 1.5rem 1rem 0;
+    border-right: 1px solid var(--border); margin-right: 1rem; white-space: nowrap;
+  }
+  nav a {
+    color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500;
+    padding: .75rem .75rem; transition: color .2s;
+    white-space: nowrap;
+  }
+  nav a:hover { color: var(--text); }
+
+  /* ── Hero ──────────────────────────────────────────────────────────────── */
+  .hero {
+    position: relative; overflow: hidden;
+    padding: 6rem 2rem 5rem;
+    text-align: center;
+  }
+  .hero::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99,102,241,.35), transparent),
+                radial-gradient(ellipse 40% 40% at 80% 80%, rgba(16,185,129,.12), transparent);
+    pointer-events: none;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: .5rem;
+    background: var(--indigo-bg); border: 1px solid rgba(129,140,248,.3);
+    color: var(--indigo); font-size: 12px; font-weight: 600;
+    letter-spacing: .08em; text-transform: uppercase;
+    padding: .35rem 1rem; border-radius: 99px; margin-bottom: 1.5rem;
+  }
+  .hero h1 {
+    font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 800; line-height: 1.1;
+    letter-spacing: -.02em;
+    background: linear-gradient(135deg, #e2e8f0 0%, var(--indigo) 50%, var(--emerald) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; margin-bottom: 1rem;
+  }
+  .hero-sub {
+    font-size: 1.1rem; color: var(--muted); max-width: 620px; margin: 0 auto 2rem;
+  }
+  .hero-pills { display: flex; flex-wrap: wrap; gap: .6rem; justify-content: center; }
+  .pill {
+    font-size: 12px; font-weight: 600; padding: .3rem .85rem; border-radius: 99px;
+    letter-spacing: .04em;
+  }
+  .pill-i { background: var(--indigo-bg); color: var(--indigo); border: 1px solid rgba(129,140,248,.25); }
+  .pill-a { background: var(--amber-bg);  color: var(--amber);  border: 1px solid rgba(251,191,36,.25); }
+  .pill-e { background: var(--emerald-bg);color: var(--emerald);border: 1px solid rgba(52,211,153,.25); }
+
+  /* ── Layout ────────────────────────────────────────────────────────────── */
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 2rem; }
+  section { padding: 4rem 0; border-top: 1px solid var(--border); }
+
+  /* ── Section Headers ───────────────────────────────────────────────────── */
+  .section-label {
+    font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+    margin-bottom: .6rem;
+  }
+  .label-i { color: var(--indigo); }
+  .label-a { color: var(--amber); }
+  .label-e { color: var(--emerald); }
+
+  .section-title {
+    font-size: clamp(1.4rem, 3vw, 2rem); font-weight: 800; letter-spacing: -.01em;
+    margin-bottom: .75rem;
+  }
+  .section-desc { color: var(--muted); max-width: 620px; margin-bottom: 2.5rem; font-size: .95rem; }
+
+  /* ── Cards ─────────────────────────────────────────────────────────────── */
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.5rem;
+  }
+  .card-grid { display: grid; gap: 1rem; }
+  .card-grid-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .card-grid-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+
+  .card h3 { font-size: .95rem; font-weight: 700; margin-bottom: .5rem; }
+  .card p  { font-size: .85rem; color: var(--muted); line-height: 1.6; }
+
+  .card-i { border-color: rgba(129,140,248,.25); background: linear-gradient(135deg, var(--card), rgba(99,102,241,.06)); }
+  .card-a { border-color: rgba(251,191,36,.2);   background: linear-gradient(135deg, var(--card), rgba(245,158,11,.06)); }
+  .card-e { border-color: rgba(52,211,153,.2);   background: linear-gradient(135deg, var(--card), rgba(16,185,129,.06)); }
+
+  .card-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; margin-bottom: .8rem;
+  }
+  .icon-i { background: var(--indigo-bg); }
+  .icon-a { background: var(--amber-bg); }
+  .icon-e { background: var(--emerald-bg); }
+
+  /* ── HLD Diagram ────────────────────────────────────────────────────────── */
+  .diagram-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 2rem; overflow-x: auto;
+  }
+  .hld-grid {
+    display: grid;
+    grid-template-columns: 1fr 40px 1fr 40px 1fr;
+    grid-template-rows: auto 40px auto;
+    gap: 0; align-items: center; min-width: 640px;
+  }
+  .hld-node {
+    border-radius: 10px; padding: 1rem 1.2rem; text-align: center;
+    font-size: .8rem; font-weight: 600; border: 1px solid;
+  }
+  .hld-node .node-title { font-size: .75rem; font-weight: 700; margin-bottom: .25rem; }
+  .hld-node .node-sub   { font-size: .7rem; font-weight: 400; opacity: .7; }
+
+  .node-i { background: var(--indigo-bg); border-color: rgba(129,140,248,.4); color: var(--indigo); }
+  .node-a { background: var(--amber-bg);  border-color: rgba(251,191,36,.4);  color: var(--amber); }
+  .node-e { background: var(--emerald-bg);border-color: rgba(52,211,153,.4);  color: var(--emerald); }
+  .node-r { background: var(--red-bg);    border-color: rgba(248,113,113,.4); color: var(--red); }
+  .node-s { background: rgba(255,255,255,.04); border-color: var(--border); color: var(--muted); }
+
+  .arrow { text-align: center; color: var(--faint); font-size: 1.2rem; }
+  .arrow-down { text-align: center; color: var(--faint); font-size: 1.2rem; }
+  .span-full { grid-column: 1 / -1; }
+
+  /* ── Pipeline Flow ──────────────────────────────────────────────────────── */
+  .pipeline {
+    display: flex; flex-wrap: nowrap; gap: 0; align-items: stretch;
+    overflow-x: auto; padding-bottom: .5rem;
+  }
+  .pipe-step {
+    flex: 0 0 auto; min-width: 130px;
+    display: flex; flex-direction: column; align-items: center;
+    text-align: center;
+  }
+  .pipe-node {
+    width: 100%; padding: .75rem .5rem;
+    border-radius: 10px; border: 1px solid;
+    font-size: .72rem; font-weight: 700; line-height: 1.3;
+  }
+  .pipe-connector {
+    flex: 0 0 32px; display: flex; align-items: center; justify-content: center;
+    color: var(--faint); font-size: 18px; align-self: flex-start; margin-top: 14px;
+  }
+  .pipe-num {
+    width: 20px; height: 20px; border-radius: 50%; background: var(--border);
+    font-size: 10px; font-weight: 800; color: var(--muted);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: .4rem;
+  }
+  .pipe-sub { font-size: .65rem; color: var(--muted); margin-top: .35rem; max-width: 120px; }
+
+  /* ── Tech Table ─────────────────────────────────────────────────────────── */
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  thead tr { background: var(--surface); }
+  th {
+    text-align: left; padding: .75rem 1rem; font-size: .72rem; font-weight: 700;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  td { padding: .75rem 1rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,.02); }
+  .td-tech { font-weight: 700; color: var(--text); white-space: nowrap; }
+  .td-why { color: var(--muted); font-size: .82rem; }
+  .badge {
+    display: inline-block; font-size: .65rem; font-weight: 700; padding: .2rem .55rem;
+    border-radius: 4px; letter-spacing: .05em; text-transform: uppercase;
+  }
+  .badge-i { background: var(--indigo-bg); color: var(--indigo); border: 1px solid rgba(129,140,248,.3); }
+  .badge-a { background: var(--amber-bg);  color: var(--amber);  border: 1px solid rgba(251,191,36,.3); }
+  .badge-e { background: var(--emerald-bg);color: var(--emerald);border: 1px solid rgba(52,211,153,.3); }
+  .badge-r { background: var(--red-bg);    color: var(--red);    border: 1px solid rgba(248,113,113,.3); }
+
+  /* ── API Table ──────────────────────────────────────────────────────────── */
+  .method {
+    display: inline-block; font-size: .65rem; font-weight: 800; padding: .15rem .5rem;
+    border-radius: 4px; font-family: monospace; letter-spacing: .04em; min-width: 46px; text-align: center;
+  }
+  .get  { background: rgba(52,211,153,.15); color: var(--emerald); border: 1px solid rgba(52,211,153,.3); }
+  .post { background: rgba(129,140,248,.15); color: var(--indigo); border: 1px solid rgba(129,140,248,.3); }
+  .del  { background: var(--red-bg); color: var(--red); border: 1px solid rgba(248,113,113,.3); }
+  .endpoint { font-family: 'Courier New', monospace; font-size: .82rem; color: var(--text); }
+
+  /* ── DB Schema ──────────────────────────────────────────────────────────── */
+  .schema-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+  .schema-table { background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .schema-header {
+    padding: .6rem 1rem; font-size: .75rem; font-weight: 800;
+    letter-spacing: .06em; text-transform: uppercase;
+    display: flex; align-items: center; gap: .5rem;
+  }
+  .schema-header-i { background: var(--indigo-bg); color: var(--indigo); }
+  .schema-header-e { background: var(--emerald-bg); color: var(--emerald); }
+  .schema-header-a { background: var(--amber-bg); color: var(--amber); }
+  .schema-row { display: flex; justify-content: space-between; align-items: center;
+    padding: .45rem 1rem; border-top: 1px solid var(--border); font-size: .78rem; }
+  .schema-field { color: var(--text); font-family: monospace; }
+  .schema-type  { color: var(--muted); font-size: .7rem; }
+  .pk { color: var(--amber); font-size: .65rem; font-weight: 700; margin-right: .3rem; }
+  .fk { color: var(--indigo); font-size: .65rem; font-weight: 700; margin-right: .3rem; }
+
+  /* ── Architecture SVG wrapper ───────────────────────────────────────────── */
+  .svg-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 1.5rem; overflow-x: auto; }
+  svg text { font-family: 'Segoe UI', system-ui, sans-serif; }
+
+  /* ── LLD State Machine ──────────────────────────────────────────────────── */
+  .state-machine {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem;
+    position: relative;
+  }
+  .state-node {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1rem; text-align: center;
+  }
+  .state-name { font-size: .75rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; margin-bottom: .3rem; }
+  .state-desc { font-size: .72rem; color: var(--muted); }
+  .state-tag  { font-size: .65rem; font-weight: 700; padding: .15rem .45rem; border-radius: 4px; display: inline-block; margin-top: .4rem; }
+
+  /* ── Deployment Diagram ─────────────────────────────────────────────────── */
+  .deploy-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;
+  }
+  .deploy-layer {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  }
+  .deploy-header {
+    padding: .7rem 1rem; font-size: .72rem; font-weight: 800;
+    letter-spacing: .08em; text-transform: uppercase; border-bottom: 1px solid var(--border);
+  }
+  .deploy-header-i { background: var(--indigo-bg); color: var(--indigo); }
+  .deploy-header-e { background: var(--emerald-bg); color: var(--emerald); }
+  .deploy-row { display: flex; align-items: flex-start; gap: .75rem; padding: .75rem 1rem; border-top: 1px solid var(--border); }
+  .deploy-row:first-of-type { border-top: none; }
+  .deploy-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+  .deploy-info .name { font-size: .82rem; font-weight: 700; margin-bottom: .15rem; }
+  .deploy-info .desc { font-size: .75rem; color: var(--muted); }
+
+  /* ── Stat Bar ───────────────────────────────────────────────────────────── */
+  .stat-bar { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 2.5rem; }
+  .stat {
+    flex: 1; min-width: 150px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1rem 1.25rem;
+  }
+  .stat-val { font-size: 1.6rem; font-weight: 800; letter-spacing: -.02em; }
+  .stat-lbl { font-size: .75rem; color: var(--muted); margin-top: .15rem; }
+
+  /* ── Footer ─────────────────────────────────────────────────────────────── */
+  footer {
+    border-top: 1px solid var(--border); padding: 2rem;
+    text-align: center; color: var(--muted); font-size: .82rem;
+  }
+
+  /* ── Animations ─────────────────────────────────────────────────────────── */
+  @keyframes fade-up {
+    from { opacity:0; transform: translateY(16px); }
+    to   { opacity:1; transform: translateY(0); }
+  }
+  .fade-up { animation: fade-up .5s ease forwards; }
+  .delay-1 { animation-delay: .1s; opacity: 0; }
+  .delay-2 { animation-delay: .2s; opacity: 0; }
+  .delay-3 { animation-delay: .3s; opacity: 0; }
+
+  /* ── Responsive ─────────────────────────────────────────────────────────── */
+  @media (max-width: 700px) {
+    .hld-grid { grid-template-columns: 1fr; }
+    .state-machine { grid-template-columns: 1fr; }
+    .deploy-grid { grid-template-columns: 1fr; }
+    nav a { font-size: 12px; padding: .5rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Nav ─────────────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-brand">CPA AI Agent</div>
+  <a href="#overview">Overview</a>
+  <a href="#hld">HLD</a>
+  <a href="#pipeline">Pipeline</a>
+  <a href="#lld">LLD</a>
+  <a href="#techstack">Tech Stack</a>
+  <a href="#api">API</a>
+  <a href="#database">Database</a>
+  <a href="#deploy">Deployment</a>
+</nav>
+
+<!-- ── Hero ────────────────────────────────────────────────────────────────── -->
+<div class="hero">
+  <div class="hero-badge">System Design Document · v1.0</div>
+  <h1 class="fade-up">CPA AI Agent</h1>
+  <p class="hero-sub fade-up delay-1">
+    An end-to-end multi-agent AI system that autonomously audits freight invoices,
+    detects pricing anomalies, and delivers financial intelligence — from raw PDF to dashboard in seconds.
+  </p>
+  <div class="hero-pills fade-up delay-2">
+    <span class="pill pill-i">Python · FastAPI</span>
+    <span class="pill pill-a">LangGraph · Groq LLM</span>
+    <span class="pill pill-e">Docling · Apify</span>
+    <span class="pill pill-i">Vite · TypeScript</span>
+    <span class="pill pill-a">SQLite · Pydantic</span>
+    <span class="pill pill-e">Docker · Render</span>
+  </div>
+</div>
+
+<!-- ── Overview ─────────────────────────────────────────────────────────────── -->
+<section id="overview">
+<div class="container">
+  <div class="section-label label-i">01 — What is this?</div>
+  <h2 class="section-title">Executive Overview</h2>
+  <p class="section-desc">
+    Freight companies process hundreds of invoices monthly. Manual auditing is slow, error-prone, and expensive.
+    CPA AI Agent replaces that process with a fully automated AI pipeline.
+  </p>
+
+  <div class="stat-bar">
+    <div class="stat">
+      <div class="stat-val" style="color:var(--indigo)">7</div>
+      <div class="stat-lbl">Specialized AI Agents</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" style="color:var(--amber)">18</div>
+      <div class="stat-lbl">REST API Endpoints</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" style="color:var(--emerald)">100%</div>
+      <div class="stat-lbl">PDF → Structured Data</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" style="color:var(--indigo)">4</div>
+      <div class="stat-lbl">Anomaly Severity Levels</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" style="color:var(--amber)">&lt;30s</div>
+      <div class="stat-lbl">Per Invoice Audit Time</div>
+    </div>
+  </div>
+
+  <div class="card-grid card-grid-3">
+    <div class="card card-i">
+      <div class="card-icon icon-i">🧠</div>
+      <h3 style="color:var(--indigo)">What it does</h3>
+      <p>Accepts PDF invoices, extracts structured data using LLMs, benchmarks freight rates against live market data, flags anomalies, and generates audit reports — all without human input.</p>
+    </div>
+    <div class="card card-a">
+      <div class="card-icon icon-a">💡</div>
+      <h3 style="color:var(--amber)">Why it exists</h3>
+      <p>Invoice fraud and billing errors in freight logistics cost companies 3–5% of revenue annually. Traditional auditing tools require templates. This system works on any invoice format.</p>
+    </div>
+    <div class="card card-e">
+      <div class="card-icon icon-e">🚀</div>
+      <h3 style="color:var(--emerald)">Key innovation</h3>
+      <p>Combines Docling (PDF table preservation) + Groq LLM (semantic extraction) + Apify (real-time market benchmarks) in a LangGraph state machine — no brittle regex, no templates.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ── HLD ───────────────────────────────────────────────────────────────────── -->
+<section id="hld">
+<div class="container">
+  <div class="section-label label-a">02 — Architecture</div>
+  <h2 class="section-title">High-Level System Design</h2>
+  <p class="section-desc">
+    Three-tier architecture: a React-free TypeScript frontend, a FastAPI backend with multi-agent orchestration, and external AI/data services.
+  </p>
+
+  <div class="diagram-box">
+    <svg viewBox="0 0 900 420" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:100%;min-width:640px">
+
+      <!-- ── Layer labels ── -->
+      <text x="60" y="30" font-size="10" fill="#484f58" font-weight="700" letter-spacing="2" text-anchor="middle">CLIENT</text>
+      <text x="340" y="30" font-size="10" fill="#484f58" font-weight="700" letter-spacing="2" text-anchor="middle">BACKEND</text>
+      <text x="720" y="30" font-size="10" fill="#484f58" font-weight="700" letter-spacing="2" text-anchor="middle">EXTERNAL SERVICES</text>
+
+      <!-- vertical dividers -->
+      <line x1="170" y1="20" x2="170" y2="410" stroke="#1f2937" stroke-dasharray="4,4"/>
+      <line x1="530" y1="20" x2="530" y2="410" stroke="#1f2937" stroke-dasharray="4,4"/>
+
+      <!-- ── CLIENT LAYER ── -->
+      <!-- Browser -->
+      <rect x="20" y="50" width="100" height="50" rx="8" fill="rgba(129,140,248,0.1)" stroke="rgba(129,140,248,0.4)"/>
+      <text x="70" y="72" font-size="10" font-weight="700" fill="#818cf8" text-anchor="middle">Browser</text>
+      <text x="70" y="87" font-size="8" fill="#8b949e" text-anchor="middle">Vite + TypeScript</text>
+
+      <!-- Dashboard -->
+      <rect x="20" y="125" width="100" height="50" rx="8" fill="rgba(129,140,248,0.07)" stroke="rgba(129,140,248,0.25)"/>
+      <text x="70" y="147" font-size="10" font-weight="700" fill="#818cf8" text-anchor="middle">Dashboard</text>
+      <text x="70" y="162" font-size="8" fill="#8b949e" text-anchor="middle">dashboard.html</text>
+
+      <!-- Landing -->
+      <rect x="20" y="200" width="100" height="50" rx="8" fill="rgba(129,140,248,0.07)" stroke="rgba(129,140,248,0.25)"/>
+      <text x="70" y="222" font-size="10" font-weight="700" fill="#818cf8" text-anchor="middle">Landing Page</text>
+      <text x="70" y="237" font-size="8" fill="#8b949e" text-anchor="middle">index.html</text>
+
+      <!-- ── BACKEND LAYER ── -->
+      <!-- FastAPI -->
+      <rect x="200" y="50" width="120" height="50" rx="8" fill="rgba(52,211,153,0.1)" stroke="rgba(52,211,153,0.4)"/>
+      <text x="260" y="72" font-size="10" font-weight="700" fill="#34d399" text-anchor="middle">FastAPI</text>
+      <text x="260" y="87" font-size="8" fill="#8b949e" text-anchor="middle">18 REST Endpoints</text>
+
+      <!-- Orchestrator -->
+      <rect x="200" y="130" width="120" height="50" rx="8" fill="rgba(251,191,36,0.1)" stroke="rgba(251,191,36,0.4)"/>
+      <text x="260" y="152" font-size="10" font-weight="700" fill="#fbbf24" text-anchor="middle">Hermes</text>
+      <text x="260" y="167" font-size="8" fill="#8b949e" text-anchor="middle">LangGraph Orchestrator</text>
+
+      <!-- Agents box -->
+      <rect x="185" y="210" width="150" height="140" rx="8" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.07)"/>
+      <text x="260" y="228" font-size="8" font-weight="700" fill="#484f58" text-anchor="middle" letter-spacing="1">AGENT LAYER</text>
+      <rect x="196" y="236" width="58" height="22" rx="4" fill="rgba(129,140,248,0.08)" stroke="rgba(129,140,248,0.25)"/>
+      <text x="225" y="251" font-size="7.5" fill="#818cf8" text-anchor="middle">Ingestion</text>
+      <rect x="265" y="236" width="58" height="22" rx="4" fill="rgba(129,140,248,0.08)" stroke="rgba(129,140,248,0.25)"/>
+      <text x="294" y="251" font-size="7.5" fill="#818cf8" text-anchor="middle">Extraction</text>
+      <rect x="196" y="265" width="58" height="22" rx="4" fill="rgba(251,191,36,0.08)" stroke="rgba(251,191,36,0.25)"/>
+      <text x="225" y="280" font-size="7.5" fill="#fbbf24" text-anchor="middle">Storage</text>
+      <rect x="265" y="265" width="58" height="22" rx="4" fill="rgba(251,191,36,0.08)" stroke="rgba(251,191,36,0.25)"/>
+      <text x="294" y="280" font-size="7.5" fill="#fbbf24" text-anchor="middle">Benchmark</text>
+      <rect x="196" y="294" width="58" height="22" rx="4" fill="rgba(52,211,153,0.08)" stroke="rgba(52,211,153,0.25)"/>
+      <text x="225" y="309" font-size="7.5" fill="#34d399" text-anchor="middle">Analysis</text>
+      <rect x="265" y="294" width="58" height="22" rx="4" fill="rgba(52,211,153,0.08)" stroke="rgba(52,211,153,0.25)"/>
+      <text x="294" y="309" font-size="7.5" fill="#34d399" text-anchor="middle">Feedback</text>
+      <rect x="196" y="323" width="127" height="22" rx="4" fill="rgba(248,113,113,0.08)" stroke="rgba(248,113,113,0.25)"/>
+      <text x="259" y="338" font-size="7.5" fill="#f87171" text-anchor="middle">Report Generator</text>
+
+      <!-- SQLite -->
+      <rect x="370" y="130" width="100" height="50" rx="8" fill="rgba(52,211,153,0.08)" stroke="rgba(52,211,153,0.25)"/>
+      <text x="420" y="151" font-size="10" font-weight="700" fill="#34d399" text-anchor="middle">SQLite DB</text>
+      <text x="420" y="167" font-size="8" fill="#8b949e" text-anchor="middle">invoices · feedback</text>
+
+      <!-- File System -->
+      <rect x="370" y="210" width="100" height="50" rx="8" fill="rgba(52,211,153,0.08)" stroke="rgba(52,211,153,0.25)"/>
+      <text x="420" y="231" font-size="10" font-weight="700" fill="#34d399" text-anchor="middle">File System</text>
+      <text x="420" y="247" font-size="8" fill="#8b949e" text-anchor="middle">PDFs · Reports</text>
+
+      <!-- Cache -->
+      <rect x="370" y="280" width="100" height="50" rx="8" fill="rgba(52,211,153,0.08)" stroke="rgba(52,211,153,0.25)"/>
+      <text x="420" y="301" font-size="10" font-weight="700" fill="#34d399" text-anchor="middle">Cache Layer</text>
+      <text x="420" y="317" font-size="8" fill="#8b949e" text-anchor="middle">Docling + LLM</text>
+
+      <!-- ── EXTERNAL LAYER ── -->
+      <!-- Groq -->
+      <rect x="560" y="50" width="120" height="50" rx="8" fill="rgba(251,191,36,0.1)" stroke="rgba(251,191,36,0.4)"/>
+      <text x="620" y="72" font-size="10" font-weight="700" fill="#fbbf24" text-anchor="middle">Groq API</text>
+      <text x="620" y="87" font-size="8" fill="#8b949e" text-anchor="middle">Llama 3.3-70B · LLM</text>
+
+      <!-- Apify -->
+      <rect x="560" y="130" width="120" height="50" rx="8" fill="rgba(251,191,36,0.08)" stroke="rgba(251,191,36,0.25)"/>
+      <text x="620" y="152" font-size="10" font-weight="700" fill="#fbbf24" text-anchor="middle">Apify</text>
+      <text x="620" y="167" font-size="8" fill="#8b949e" text-anchor="middle">Market Rate Scraper</text>
+
+      <!-- Docling -->
+      <rect x="560" y="210" width="120" height="50" rx="8" fill="rgba(129,140,248,0.08)" stroke="rgba(129,140,248,0.25)"/>
+      <text x="620" y="231" font-size="10" font-weight="700" fill="#818cf8" text-anchor="middle">Docling</text>
+      <text x="620" y="247" font-size="8" fill="#8b949e" text-anchor="middle">PDF → Markdown</text>
+
+      <!-- Render -->
+      <rect x="560" y="280" width="120" height="50" rx="8" fill="rgba(248,113,113,0.08)" stroke="rgba(248,113,113,0.25)"/>
+      <text x="620" y="301" font-size="10" font-weight="700" fill="#f87171" text-anchor="middle">Render / Railway</text>
+      <text x="620" y="317" font-size="8" fill="#8b949e" text-anchor="middle">Docker Hosting</text>
+
+      <!-- Legend -->
+      <rect x="720" y="360" width="10" height="10" rx="2" fill="rgba(129,140,248,0.3)"/>
+      <text x="736" y="370" font-size="8" fill="#8b949e">Frontend</text>
+      <rect x="790" y="360" width="10" height="10" rx="2" fill="rgba(52,211,153,0.3)"/>
+      <text x="806" y="370" font-size="8" fill="#8b949e">Backend</text>
+      <rect x="850" y="360" width="10" height="10" rx="2" fill="rgba(251,191,36,0.3)"/>
+      <text x="866" y="370" font-size="8" fill="#8b949e">External</text>
+
+      <!-- ── ARROWS ── -->
+      <!-- Browser → FastAPI (HTTP/SSE) -->
+      <path d="M120 75 L200 75" stroke="rgba(129,140,248,0.5)" stroke-width="1.5" marker-end="url(#ai)"/>
+      <text x="160" y="69" font-size="7" fill="#484f58" text-anchor="middle">REST/SSE</text>
+
+      <!-- FastAPI → Orchestrator -->
+      <path d="M260 100 L260 130" stroke="rgba(52,211,153,0.4)" stroke-width="1.5" marker-end="url(#ei)"/>
+
+      <!-- Orchestrator → Agents -->
+      <path d="M260 180 L260 210" stroke="rgba(251,191,36,0.4)" stroke-width="1.5" marker-end="url(#ai2)"/>
+
+      <!-- FastAPI → SQLite -->
+      <path d="M320 155 L370 155" stroke="rgba(52,211,153,0.35)" stroke-width="1.5" marker-end="url(#ei)"/>
+
+      <!-- Agents → File System -->
+      <path d="M335 250 L370 235" stroke="rgba(52,211,153,0.25)" stroke-width="1" stroke-dasharray="3,3"/>
+
+      <!-- Agents → Cache -->
+      <path d="M335 310 L370 305" stroke="rgba(52,211,153,0.25)" stroke-width="1" stroke-dasharray="3,3"/>
+
+      <!-- FastAPI → Groq -->
+      <path d="M480 155 Q510 155 510 75 L560 75" stroke="rgba(251,191,36,0.4)" stroke-width="1.5" marker-end="url(#aw)"/>
+
+      <!-- FastAPI → Apify -->
+      <path d="M480 165 L560 155" stroke="rgba(251,191,36,0.25)" stroke-width="1" stroke-dasharray="3,3"/>
+
+      <!-- FastAPI → Docling -->
+      <path d="M480 175 Q510 175 510 235 L560 235" stroke="rgba(129,140,248,0.3)" stroke-width="1" stroke-dasharray="3,3"/>
+
+      <!-- Arrowhead markers -->
+      <defs>
+        <marker id="ai" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L6,3 z" fill="rgba(129,140,248,0.7)"/>
+        </marker>
+        <marker id="ei" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L6,3 z" fill="rgba(52,211,153,0.7)"/>
+        </marker>
+        <marker id="ai2" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L6,3 z" fill="rgba(251,191,36,0.7)"/>
+        </marker>
+        <marker id="aw" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L6,3 z" fill="rgba(251,191,36,0.7)"/>
+        </marker>
+      </defs>
+    </svg>
+  </div>
+</div>
+</section>
+
+<!-- ── PIPELINE ──────────────────────────────────────────────────────────────── -->
+<section id="pipeline">
+<div class="container">
+  <div class="section-label label-e">03 — Data Flow</div>
+  <h2 class="section-title">AI Pipeline — Step by Step</h2>
+  <p class="section-desc">
+    The Hermes Orchestrator (LangGraph state machine) chains 7 agents sequentially. Each agent reads from and writes to a shared <code style="color:var(--indigo);background:var(--indigo-bg);padding:.1rem .35rem;border-radius:4px;font-size:.8rem">AgentState</code> dictionary — zero manual parameter passing.
+  </p>
+
+  <div class="diagram-box" style="margin-bottom:1.5rem">
+    <div class="pipeline">
+      <div class="pipe-step">
+        <div class="pipe-num">1</div>
+        <div class="pipe-node node-s">PDF Upload</div>
+        <div class="pipe-sub">User drops PDF via dashboard or CLI</div>
+      </div>
+      <div class="pipe-connector">→</div>
+      <div class="pipe-step">
+        <div class="pipe-num">2</div>
+        <div class="pipe-node node-i">Ingestion Agent</div>
+        <div class="pipe-sub">Classifies: is this actually an invoice?</div>
+      </div>
+      <div class="pipe-connector">→</div>
+      <div class="pipe-step">
+        <div class="pipe-num">3</div>
+        <div class="pipe-node node-a">Docling Parse</div>
+        <div class="pipe-sub">PDF → structured Markdown preserving tables</div>
+      </div>
+      <div class="pipe-connector">→</div>
+      <div class="pipe-step">
+        <div class="pipe-num">4</div>
+        <div class="pipe-node node-i">Extraction Agent</div>
+        <div class="pipe-sub">Groq LLM extracts 15+ structured fields</div>
+      </div>
+      <div class="pipe-connector">→</div>
+      <div class="pipe-step">
+        <div class="pipe-num">5</div>
+        <div class="pipe-node node-e">Storage Agent</div>
+        <div class="pipe-sub">Saves to SQLite, deduplication check</div>
+      </div>
+      <div class="pipe-connector">→</div>
+      <div class="pipe-step">
+        <div class="pipe-num">6</div>
+        <div class="pipe-node node-a">Benchmark Agent</div>
+        <div class="pipe-sub">Apify fetches live market freight rates</div>
+      </div>
+      <div class="pipe-connector">→</div>
+      <div class="pipe-step">
+        <div class="pipe-num">7</div>
+        <div class="pipe-node node-i">Analysis Agent</div>
+        <div class="pipe-sub">Flags anomalies vs. thresholds</div>
+      </div>
+      <div class="pipe-connector">→</div>
+      <div class="pipe-step">
+        <div class="pipe-num">8</div>
+        <div class="pipe-node node-e">Report Agent</div>
+        <div class="pipe-sub">Generates JSON audit report per invoice</div>
+      </div>
+      <div class="pipe-connector">→</div>
+      <div class="pipe-step">
+        <div class="pipe-num">9</div>
+        <div class="pipe-node" style="border-color:rgba(251,191,36,.4);background:var(--amber-bg);color:var(--amber)">Dashboard</div>
+        <div class="pipe-sub">Live results streamed via SSE</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card-grid card-grid-2">
+    <div class="card">
+      <h3 style="color:var(--amber);margin-bottom:.75rem">Why LangGraph (not simple function calls)?</h3>
+      <p style="margin-bottom:.6rem">LangGraph models the pipeline as a directed graph with typed state. This gives:</p>
+      <ul style="color:var(--muted);font-size:.82rem;padding-left:1.2rem;display:flex;flex-direction:column;gap:.35rem">
+        <li><strong style="color:var(--text)">Conditional routing</strong> — non-invoices are skipped entirely, not passed through every agent</li>
+        <li><strong style="color:var(--text)">Shared state</strong> — AgentState dict flows between nodes, no spaghetti parameter chains</li>
+        <li><strong style="color:var(--text)">Visual debuggability</strong> — the graph can be rendered and inspected</li>
+        <li><strong style="color:var(--text)">Industry standard</strong> — used in production LLM workflows at scale</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="color:var(--indigo);margin-bottom:.75rem">Why Docling + LLM (not regex)?</h3>
+      <p style="margin-bottom:.6rem">Invoice formats vary wildly between vendors. Two-step extraction wins:</p>
+      <ul style="color:var(--muted);font-size:.82rem;padding-left:1.2rem;display:flex;flex-direction:column;gap:.35rem">
+        <li><strong style="color:var(--text)">Docling</strong> — converts PDFs to Markdown while preserving table structure (line items stay intact)</li>
+        <li><strong style="color:var(--text)">Groq LLM</strong> — reads semantic meaning ("this is the total") regardless of layout position</li>
+        <li><strong style="color:var(--text)">Caching</strong> — both Docling parse and LLM response cached by file hash, so re-runs are instant</li>
+        <li><strong style="color:var(--text)">Zero templates</strong> — works on any vendor's invoice without configuration</li>
+      </ul>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ── LLD ────────────────────────────────────────────────────────────────────── -->
+<section id="lld">
+<div class="container">
+  <div class="section-label label-i">04 — Low Level Design</div>
+  <h2 class="section-title">Component Deep Dive</h2>
+  <p class="section-desc">
+    Each agent is an isolated class with a single responsibility. No business logic leaks between layers.
+  </p>
+
+  <div class="state-machine" style="margin-bottom:2rem">
+    <div class="state-node" style="border-color:rgba(129,140,248,.25)">
+      <div class="state-name" style="color:var(--indigo)">IngestionAgent</div>
+      <div class="state-desc">Scans input_docs for PDFs. Sends each to Groq with a classification prompt — is this an invoice? Returns a boolean + confidence score.</div>
+      <span class="state-tag badge-i">ingestion.py</span>
+    </div>
+    <div class="state-node" style="border-color:rgba(129,140,248,.25)">
+      <div class="state-name" style="color:var(--indigo)">ExtractionAgent</div>
+      <div class="state-desc">Docling converts PDF → Markdown. Groq LLM extracts: vendor, invoice_number, date, currency, incoterms, line_items[], total_amount, tax, payment_terms.</div>
+      <span class="state-tag badge-i">extraction.py</span>
+    </div>
+    <div class="state-node" style="border-color:rgba(52,211,153,.25)">
+      <div class="state-name" style="color:var(--emerald)">StorageAgent</div>
+      <div class="state-desc">Validates the extracted InvoiceData Pydantic model. Checks for duplicate invoice numbers. Writes to SQLite via SQLAlchemy ORM. Returns StorageResult with the DB row ID.</div>
+      <span class="state-tag badge-e">storage.py</span>
+    </div>
+    <div class="state-node" style="border-color:rgba(251,191,36,.25)">
+      <div class="state-name" style="color:var(--amber)">BenchmarkingAgent</div>
+      <div class="state-desc">For each line item, queries Apify for real-time freight market rates on that route. Calculates % deviation. Falls back to mock rates when USE_MOCK_APIFY=true.</div>
+      <span class="state-tag badge-a">benchmarking.py</span>
+    </div>
+    <div class="state-node" style="border-color:rgba(248,113,113,.25)">
+      <div class="state-name" style="color:var(--red)">AnalysisAgent</div>
+      <div class="state-desc">Compares benchmarked rates against BENCHMARK_THRESHOLD_PERCENT (default 15%). Classifies severity: Critical (>50%), High (>30%), Medium (>15%), Low. Generates AnomalyReport.</div>
+      <span class="state-tag badge-r">analysis.py</span>
+    </div>
+    <div class="state-node" style="border-color:rgba(52,211,153,.25)">
+      <div class="state-name" style="color:var(--emerald)">FeedbackAgent</div>
+      <div class="state-desc">Stores human corrections (field_name, original_value, corrected_value) in the feedback table. Tracks most common correction patterns for model improvement over time.</div>
+      <span class="state-tag badge-e">feedback.py</span>
+    </div>
+  </div>
+
+  <div class="card-grid card-grid-2">
+    <div class="card">
+      <h3 style="color:var(--emerald);margin-bottom:.75rem">Frontend Architecture</h3>
+      <p style="margin-bottom:.75rem;font-size:.82rem">No React. Vite bundles plain TypeScript with multi-page output. Why?</p>
+      <ul style="color:var(--muted);font-size:.82rem;padding-left:1.2rem;display:flex;flex-direction:column;gap:.35rem">
+        <li><strong style="color:var(--text)">src/api.ts</strong> — typed API client, all 18 endpoints, single source of truth for response shapes</li>
+        <li><strong style="color:var(--text)">src/dashboard.ts</strong> — CSS section switching (no router), lazy-loads data per section</li>
+        <li><strong style="color:var(--text)">SSE Streaming</strong> — EventSource connects to /api/pipeline/stream, logs print in real-time</li>
+        <li><strong style="color:var(--text)">Zero framework overhead</strong> — ships 35KB of JS. React would add ~150KB for no UX gain here</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3 style="color:var(--amber);margin-bottom:.75rem">Error Handling Strategy</h3>
+      <p style="margin-bottom:.75rem;font-size:.82rem">Multi-layer resilience baked in:</p>
+      <ul style="color:var(--muted);font-size:.82rem;padding-left:1.2rem;display:flex;flex-direction:column;gap:.35rem">
+        <li><strong style="color:var(--text)">Pydantic validation</strong> — all API inputs/outputs validated at the boundary, never trust raw data</li>
+        <li><strong style="color:var(--text)">Retry decorator</strong> — utils/retry.py wraps LLM calls with exponential backoff</li>
+        <li><strong style="color:var(--text)">Mock fallback</strong> — Apify unavailable? USE_MOCK_APIFY=true uses static rate tables, pipeline never blocks</li>
+        <li><strong style="color:var(--text)">Cache</strong> — Docling + LLM results cached by file hash; re-processing an invoice is instant</li>
+      </ul>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ── TECH STACK ─────────────────────────────────────────────────────────────── -->
+<section id="techstack">
+<div class="container">
+  <div class="section-label label-a">05 — Technology Choices</div>
+  <h2 class="section-title">Tech Stack & Rationale</h2>
+  <p class="section-desc">Every technology choice was deliberate. Here is what was chosen and why — not just what.</p>
+
+  <div class="diagram-box">
+    <table>
+      <thead>
+        <tr>
+          <th>Layer</th>
+          <th>Technology</th>
+          <th>Category</th>
+          <th>Why This, Not an Alternative</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="color:var(--muted);font-size:.8rem">Backend</td>
+          <td class="td-tech">FastAPI</td>
+          <td><span class="badge badge-e">Framework</span></td>
+          <td class="td-why">Async-first, auto OpenAPI docs, Pydantic-native. Flask lacks async; Django is overkill for a pure API layer.</td>
+        </tr>
+        <tr>
+          <td style="color:var(--muted);font-size:.8rem">Agent Orchestration</td>
+          <td class="td-tech">LangGraph</td>
+          <td><span class="badge badge-a">AI</span></td>
+          <td class="td-why">State machine model enables conditional routing (skip non-invoices) and shared typed state. LangChain alone is linear; LangGraph handles branching.</td>
+        </tr>
+        <tr>
+          <td style="color:var(--muted);font-size:.8rem">LLM</td>
+          <td class="td-tech">Groq + Llama 3.3-70B</td>
+          <td><span class="badge badge-a">AI</span></td>
+          <td class="td-why">Groq's inference hardware delivers ~300 tokens/sec — 10× faster than OpenAI at &lt;10% the cost. 70B model accuracy is sufficient for structured extraction.</td>
+        </tr>
+        <tr>
+          <td style="color:var(--muted);font-size:.8rem">PDF Parsing</td>
+          <td class="td-tech">Docling (IBM)</td>
+          <td><span class="badge badge-i">Processing</span></td>
+          <td class="td-why">Preserves table structure as Markdown. PyPDF2/pdfminer flatten tables into garbled text, destroying line-item data. Docling is the only OSS tool that solves this reliably.</td>
+        </tr>
+        <tr>
+          <td style="color:var(--muted);font-size:.8rem">Market Data</td>
+          <td class="td-tech">Apify</td>
+          <td><span class="badge badge-a">Scraping</span></td>
+          <td class="td-why">Managed scraper infrastructure for freight rate websites. Eliminates maintaining custom scrapers that break when sites change their HTML.</td>
+        </tr>
+        <tr>
+          <td style="color:var(--muted);font-size:.8rem">Database</td>
+          <td class="td-tech">SQLite + SQLAlchemy</td>
+          <td><span class="badge badge-e">Storage</span></td>
+          <td class="td-why">Zero-configuration, file-based, sufficient for thousands of invoices. PostgreSQL would add operational complexity with no benefit at this scale. SQLAlchemy ORM enables a future DB swap with one config change.</td>
+        </tr>
+        <tr>
+          <td style="color:var(--muted);font-size:.8rem">Validation</td>
+          <td class="td-tech">Pydantic v2</td>
+          <td><span class="badge badge-i">Types</span></td>
+          <td class="td-why">Runtime type enforcement on all LLM outputs and API boundaries. LLMs hallucinate fields — Pydantic catches bad responses before they reach the database.</td>
+        </tr>
+        <tr>
+          <td style="color:var(--muted);font-size:.8rem">Frontend Build</td>
+          <td class="td-tech">Vite + TypeScript</td>
+          <td><span class="badge badge-i">Frontend</span></td>
+          <td class="td-why">Sub-second HMR, multi-page static output, Rollup bundling. No React needed — the dashboard is a data-display app, not an interactive SPA.</td>
+        </tr>
+        <tr>
+          <td style="color:var(--muted);font-size:.8rem">Styling</td>
+          <td class="td-tech">Tailwind CSS (CDN)</td>
+          <td><span class="badge badge-i">Frontend</span></td>
+          <td class="td-why">Utility-first, zero CSS file management. CDN mode avoids a build step for styling; custom design tokens via config for the "Sovereign Auditor" dark theme.</td>
+        </tr>
+        <tr>
+          <td style="color:var(--muted);font-size:.8rem">Real-time</td>
+          <td class="td-tech">SSE (Server-Sent Events)</td>
+          <td><span class="badge badge-e">Protocol</span></td>
+          <td class="td-why">Pipeline logs stream to the dashboard in real-time. WebSockets are bidirectional (overkill for one-way log streaming); SSE is simpler, HTTP-native, and auto-reconnects.</td>
+        </tr>
+        <tr>
+          <td style="color:var(--muted);font-size:.8rem">Package Manager</td>
+          <td class="td-tech">uv (Astral)</td>
+          <td><span class="badge badge-e">Tooling</span></td>
+          <td class="td-why">10–100× faster than pip. Rust-based resolver, lock-file based reproducibility. Docling's heavy dependencies (torch, CUDA) install in seconds, not minutes.</td>
+        </tr>
+        <tr>
+          <td style="color:var(--muted);font-size:.8rem">Containerization</td>
+          <td class="td-tech">Docker (multi-stage)</td>
+          <td><span class="badge badge-a">DevOps</span></td>
+          <td class="td-why">Builder stage installs deps (8GB+ with torch/CUDA); runtime stage copies only the .venv and app code. Reproducible deploys regardless of host OS.</td>
+        </tr>
+        <tr>
+          <td style="color:var(--muted);font-size:.8rem">Config</td>
+          <td class="td-tech">Pydantic Settings</td>
+          <td><span class="badge badge-i">Config</span></td>
+          <td class="td-why">Reads from .env + environment variables with type validation at startup. App fails fast with a clear error if GROQ_API_KEY is missing, not silently at first LLM call.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- ── API ────────────────────────────────────────────────────────────────────── -->
+<section id="api">
+<div class="container">
+  <div class="section-label label-e">06 — API Reference</div>
+  <h2 class="section-title">REST API Endpoints</h2>
+  <p class="section-desc">18 endpoints. All prefixed <code style="color:var(--indigo);background:var(--indigo-bg);padding:.1rem .35rem;border-radius:4px;font-size:.8rem">/api</code>. FastAPI auto-generates OpenAPI docs at <code style="color:var(--emerald);background:var(--emerald-bg);padding:.1rem .35rem;border-radius:4px;font-size:.8rem">/docs</code>.</p>
+
+  <div class="diagram-box">
+    <table>
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Endpoint</th>
+          <th>Purpose</th>
+          <th>Response Shape</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="method get">GET</span></td>
+          <td class="endpoint">/api/health</td>
+          <td style="font-size:.82rem;color:var(--muted)">Liveness check</td>
+          <td style="font-size:.78rem;color:var(--faint);font-family:monospace">{ status, timestamp }</td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span></td>
+          <td class="endpoint">/api/status</td>
+          <td style="font-size:.82rem;color:var(--muted)">System config + counters</td>
+          <td style="font-size:.78rem;color:var(--faint);font-family:monospace">{ groq_configured, invoices_in_db, pipeline_status, … }</td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span></td>
+          <td class="endpoint">/api/dashboard</td>
+          <td style="font-size:.82rem;color:var(--muted)">Aggregated analytics</td>
+          <td style="font-size:.78rem;color:var(--faint);font-family:monospace">{ severity_breakdown, top_vendors, per_invoice_summary[] }</td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span></td>
+          <td class="endpoint">/api/invoices</td>
+          <td style="font-size:.82rem;color:var(--muted)">Paginated invoice list</td>
+          <td style="font-size:.78rem;color:var(--faint);font-family:monospace">{ invoices[], total, page, has_next }</td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span></td>
+          <td class="endpoint">/api/invoices/:id</td>
+          <td style="font-size:.82rem;color:var(--muted)">Single invoice + audit report</td>
+          <td style="font-size:.78rem;color:var(--faint);font-family:monospace">Invoice & { audit_report }</td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span></td>
+          <td class="endpoint">/api/invoices/:id/feedback</td>
+          <td style="font-size:.82rem;color:var(--muted)">Submit human correction</td>
+          <td style="font-size:.78rem;color:var(--faint);font-family:monospace">{ field_name, original, corrected, notes }</td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span></td>
+          <td class="endpoint">/api/reports</td>
+          <td style="font-size:.82rem;color:var(--muted)">List audit report files</td>
+          <td style="font-size:.78rem;color:var(--faint);font-family:monospace">{ reports[], count }</td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span></td>
+          <td class="endpoint">/api/reports/:filename</td>
+          <td style="font-size:.82rem;color:var(--muted)">Download a report JSON</td>
+          <td style="font-size:.78rem;color:var(--faint);font-family:monospace">Raw JSON audit report</td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span></td>
+          <td class="endpoint">/api/pipeline/run</td>
+          <td style="font-size:.82rem;color:var(--muted)">Trigger full pipeline</td>
+          <td style="font-size:.78rem;color:var(--faint);font-family:monospace">{ message, status }</td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span></td>
+          <td class="endpoint">/api/pipeline/status</td>
+          <td style="font-size:.82rem;color:var(--muted)">Pipeline state</td>
+          <td style="font-size:.78rem;color:var(--faint);font-family:monospace">{ status, started_at, error, last_result }</td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span></td>
+          <td class="endpoint">/api/pipeline/stream</td>
+          <td style="font-size:.82rem;color:var(--muted)">SSE log stream</td>
+          <td style="font-size:.78rem;color:var(--faint);font-family:monospace">text/event-stream { timestamp, message }</td>
+        </tr>
+        <tr>
+          <td><span class="method post">POST</span></td>
+          <td class="endpoint">/api/upload</td>
+          <td style="font-size:.82rem;color:var(--muted)">Upload PDF invoices</td>
+          <td style="font-size:.78rem;color:var(--faint);font-family:monospace">{ uploaded[], count }</td>
+        </tr>
+        <tr>
+          <td><span class="method get">GET</span></td>
+          <td class="endpoint">/api/feedback</td>
+          <td style="font-size:.82rem;color:var(--muted)">All correction history</td>
+          <td style="font-size:.78rem;color:var(--faint);font-family:monospace">{ entries[], total, most_common_corrections }</td>
+        </tr>
+        <tr>
+          <td><span class="method del">DEL</span></td>
+          <td class="endpoint">/api/cache</td>
+          <td style="font-size:.82rem;color:var(--muted)">Clear Docling + LLM cache</td>
+          <td style="font-size:.78rem;color:var(--faint);font-family:monospace">{ message, removed }</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- ── DATABASE ───────────────────────────────────────────────────────────────── -->
+<section id="database">
+<div class="container">
+  <div class="section-label label-i">07 — Data Model</div>
+  <h2 class="section-title">Database Schema</h2>
+  <p class="section-desc">SQLite via SQLAlchemy ORM. Three tables. Designed to be swapped to PostgreSQL with a single DATABASE_URL change.</p>
+
+  <div class="schema-grid">
+    <div class="schema-table">
+      <div class="schema-header schema-header-i">
+        <span>🧾</span> invoices
+      </div>
+      <div class="schema-row"><span class="schema-field"><span class="pk">PK</span>id</span><span class="schema-type">INTEGER</span></div>
+      <div class="schema-row"><span class="schema-field">vendor_name</span><span class="schema-type">TEXT</span></div>
+      <div class="schema-row"><span class="schema-field">invoice_number</span><span class="schema-type">TEXT · UNIQUE</span></div>
+      <div class="schema-row"><span class="schema-field">invoice_date</span><span class="schema-type">TEXT</span></div>
+      <div class="schema-row"><span class="schema-field">currency</span><span class="schema-type">TEXT</span></div>
+      <div class="schema-row"><span class="schema-field">incoterms</span><span class="schema-type">TEXT</span></div>
+      <div class="schema-row"><span class="schema-field">total_amount</span><span class="schema-type">FLOAT</span></div>
+      <div class="schema-row"><span class="schema-field">status</span><span class="schema-type">TEXT</span></div>
+      <div class="schema-row"><span class="schema-field">raw_data</span><span class="schema-type">JSON (full extract)</span></div>
+      <div class="schema-row"><span class="schema-field">created_at</span><span class="schema-type">DATETIME</span></div>
+    </div>
+
+    <div class="schema-table">
+      <div class="schema-header schema-header-e">
+        <span>📊</span> audit_reports
+      </div>
+      <div class="schema-row"><span class="schema-field"><span class="pk">PK</span>id</span><span class="schema-type">INTEGER</span></div>
+      <div class="schema-row"><span class="schema-field"><span class="fk">FK</span>invoice_id</span><span class="schema-type">INTEGER → invoices</span></div>
+      <div class="schema-row"><span class="schema-field">severity</span><span class="schema-type">TEXT (critical/high/…)</span></div>
+      <div class="schema-row"><span class="schema-field">anomaly_count</span><span class="schema-type">INTEGER</span></div>
+      <div class="schema-row"><span class="schema-field">report_data</span><span class="schema-type">JSON (full report)</span></div>
+      <div class="schema-row"><span class="schema-field">report_path</span><span class="schema-type">TEXT (file path)</span></div>
+      <div class="schema-row"><span class="schema-field">created_at</span><span class="schema-type">DATETIME</span></div>
+    </div>
+
+    <div class="schema-table">
+      <div class="schema-header schema-header-a">
+        <span>✏️</span> feedback_corrections
+      </div>
+      <div class="schema-row"><span class="schema-field"><span class="pk">PK</span>id</span><span class="schema-type">INTEGER</span></div>
+      <div class="schema-row"><span class="schema-field"><span class="fk">FK</span>invoice_id</span><span class="schema-type">INTEGER → invoices</span></div>
+      <div class="schema-row"><span class="schema-field">field_name</span><span class="schema-type">TEXT</span></div>
+      <div class="schema-row"><span class="schema-field">original_value</span><span class="schema-type">TEXT</span></div>
+      <div class="schema-row"><span class="schema-field">corrected_value</span><span class="schema-type">TEXT</span></div>
+      <div class="schema-row"><span class="schema-field">notes</span><span class="schema-type">TEXT (nullable)</span></div>
+      <div class="schema-row"><span class="schema-field">created_at</span><span class="schema-type">DATETIME</span></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ── DEPLOYMENT ─────────────────────────────────────────────────────────────── -->
+<section id="deploy">
+<div class="container">
+  <div class="section-label label-e">08 — Deployment</div>
+  <h2 class="section-title">Infrastructure & Deployment</h2>
+  <p class="section-desc">Fully containerized backend with a separately-deployed static frontend. Zero coupling between the two services.</p>
+
+  <div class="deploy-grid" style="margin-bottom:2rem">
+    <div class="deploy-layer">
+      <div class="deploy-header deploy-header-i">Backend — Docker Container</div>
+      <div class="deploy-row">
+        <div class="deploy-icon" style="background:var(--indigo-bg)">⚙️</div>
+        <div class="deploy-info">
+          <div class="name">FastAPI + Uvicorn</div>
+          <div class="desc">ASGI server, Python 3.12, port 8000</div>
+        </div>
+      </div>
+      <div class="deploy-row">
+        <div class="deploy-icon" style="background:var(--amber-bg)">🐳</div>
+        <div class="deploy-info">
+          <div class="name">Multi-Stage Dockerfile</div>
+          <div class="desc">Builder stage: uv sync. Runtime: python:3.12-slim. ~8.7GB image (torch+CUDA from Docling)</div>
+        </div>
+      </div>
+      <div class="deploy-row">
+        <div class="deploy-icon" style="background:var(--emerald-bg)">🗄️</div>
+        <div class="deploy-info">
+          <div class="name">SQLite persistence</div>
+          <div class="desc">Mounted disk on paid tier, local file on free tier</div>
+        </div>
+      </div>
+      <div class="deploy-row">
+        <div class="deploy-icon" style="background:var(--red-bg)">🔑</div>
+        <div class="deploy-info">
+          <div class="name">Secrets via env vars</div>
+          <div class="desc">GROQ_API_KEY, APIFY_API_TOKEN — never in code</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="deploy-layer">
+      <div class="deploy-header deploy-header-e">Frontend — Static CDN</div>
+      <div class="deploy-row">
+        <div class="deploy-icon" style="background:var(--indigo-bg)">⚡</div>
+        <div class="deploy-info">
+          <div class="name">Vite Build → dist/</div>
+          <div class="desc">npm run build outputs two HTML pages + hashed JS/CSS assets</div>
+        </div>
+      </div>
+      <div class="deploy-row">
+        <div class="deploy-icon" style="background:var(--emerald-bg)">🌐</div>
+        <div class="deploy-info">
+          <div class="name">Render Static / Vercel</div>
+          <div class="desc">CDN-distributed, free tier, no compute needed — just file serving</div>
+        </div>
+      </div>
+      <div class="deploy-row">
+        <div class="deploy-icon" style="background:var(--amber-bg)">🔗</div>
+        <div class="deploy-info">
+          <div class="name">VITE_API_URL env var</div>
+          <div class="desc">Points the frontend's API client to the deployed backend URL at build time</div>
+        </div>
+      </div>
+      <div class="deploy-row">
+        <div class="deploy-icon" style="background:var(--indigo-bg)">📦</div>
+        <div class="deploy-info">
+          <div class="name">render.yaml / railway.json</div>
+          <div class="desc">Infrastructure-as-code. Redeploys triggered automatically on git push to main</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card-grid card-grid-3">
+    <div class="card card-e">
+      <div class="card-icon icon-e">🔄</div>
+      <h3 style="color:var(--emerald)">CI/CD Flow</h3>
+      <p>git push → GitHub → Render/Railway detects push → rebuilds Docker image → deploys → health check on /api/health → live.</p>
+    </div>
+    <div class="card card-i">
+      <div class="card-icon icon-i">🛡️</div>
+      <h3 style="color:var(--indigo)">Security</h3>
+      <p>All secrets in env vars. CORS configured. File upload validates MIME type + extension. No secrets ever committed to git (.env in .gitignore).</p>
+    </div>
+    <div class="card card-a">
+      <div class="card-icon icon-a">📈</div>
+      <h3 style="color:var(--amber)">Scalability Path</h3>
+      <p>SQLite → PostgreSQL: one DATABASE_URL change. File storage → S3: one adapter change. LangGraph nodes → async tasks: swap StateGraph for distributed queue.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ── Footer ─────────────────────────────────────────────────────────────────── -->
+<footer>
+  <div style="font-size:.9rem;color:var(--text);font-weight:600;margin-bottom:.4rem">CPA AI Agent — System Design Document</div>
+  <div>Built with FastAPI · LangGraph · Groq · Docling · Vite · SQLite · Docker</div>
+  <div style="margin-top:.5rem;font-size:.75rem;color:var(--faint)">
+    <span style="color:var(--indigo)">●</span> Indigo — AI / Frontend layer &nbsp;
+    <span style="color:var(--amber)">●</span> Amber — Orchestration / External services &nbsp;
+    <span style="color:var(--emerald)">●</span> Emerald — Storage / Infrastructure
+  </div>
+</footer>
+
+</body>
+</html>
