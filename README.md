@@ -1,8 +1,8 @@
 # CPA AI Agent
 
-> End-to-end multi-agent AI system for automated freight invoice auditing — from raw PDF to a live analytics dashboard.
+> End-to-end multi-agent AI system for automated freight invoice auditing — from raw PDF to a live analytics dashboard, deployed on Google Cloud Platform.
 
-Accepts PDF invoices, extracts structured data with an LLM, benchmarks freight rates against live market prices, flags pricing anomalies, and serves everything through a REST API to an interactive TypeScript dashboard.
+Accepts PDF invoices, extracts structured data with an LLM, benchmarks freight rates against live market prices, flags pricing anomalies, and serves everything through a FastAPI REST API to an interactive dashboard built with Google Stitch.
 
 ---
 
@@ -10,31 +10,92 @@ Accepts PDF invoices, extracts structured data with an LLM, benchmarks freight r
 
 1. **Ingests PDFs** — scans `input_docs/` for freight invoices, classifies them via Groq LLM
 2. **Extracts structured data** — Docling converts PDF tables to Markdown; Llama 3.3-70B pulls vendor, dates, line items, currency, incoterms
-3. **Deduplicates** — checks SQLite before saving to prevent double-processing
+3. **Deduplicates & persists** — Supabase (PostgreSQL) stores invoices with dedup checks to prevent double-processing
 4. **Benchmarks prices** — compares invoice rates against live market freight data (Apify) or mock rates
 5. **Flags anomalies** — Critical / High / Medium / Low severity by % deviation from market
-6. **Generates reports** — JSON audit reports saved to `output_reports/`
-7. **Serves a dashboard** — 18 FastAPI endpoints + SSE streaming + Vite/TypeScript frontend
+6. **Generates reports** — JSON audit reports persisted to a GCP Storage Bucket
+7. **Serves a dashboard** — 18 FastAPI endpoints + SSE streaming + a Google Stitch HTML frontend with Supabase auth
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology | Why |
-|-------|-----------|-----|
-| **Package manager** | `uv` | 10–100× faster than pip, lock-file reproducibility |
-| **Backend framework** | FastAPI + Uvicorn | Async-first, auto OpenAPI docs, Pydantic-native |
-| **Agent orchestration** | LangGraph | State machine: conditional routing, shared typed state |
-| **LLM provider** | Groq (Llama 3.3-70B) | ~300 tok/s inference, free tier, no vendor lock-in |
-| **PDF parser** | Docling (IBM) | Preserves table structure as Markdown — the only OSS tool that does this reliably |
-| **Market data** | Apify Client | Managed scraper for live freight rate sites |
-| **Database** | SQLite + SQLAlchemy 2.0 | Zero config; ORM enables a one-line swap to PostgreSQL |
-| **Validation** | Pydantic v2 | Runtime type enforcement on all LLM outputs and API boundaries |
-| **Real-time** | SSE (Server-Sent Events) | Pipeline logs stream to dashboard without WebSocket complexity |
-| **Frontend build** | Vite + TypeScript | Sub-second HMR, multi-page static output, 35KB JS bundle |
-| **Styling** | Tailwind CSS | Utility-first, custom dark design tokens |
-| **Containerization** | Docker (multi-stage) | Reproducible deploys; builder + slim runtime stages |
-| **Test runner** | pytest + pytest-mock | 8 test modules covering all core agents and utilities |
+### Frontend
+| Technology | Purpose |
+|-----------|---------|
+| **Google Stitch** | AI-generated HTML/CSS frontend (landing page + dashboard) |
+| **HTML5 + CSS3** | Markup and styling output from Stitch |
+| **TypeScript** | Typed API client, SSE streaming, dashboard logic |
+| **Vite** | Multi-page static build + dev server with `/api` proxy |
+| **Tailwind CSS** | Utility-first styling, custom dark design tokens |
+
+### Backend
+| Technology | Purpose |
+|-----------|---------|
+| **Python 3.12** | Backend runtime |
+| **FastAPI + Uvicorn** | Async REST API, auto OpenAPI docs, Pydantic-native |
+| **LangGraph** | Multi-agent state machine orchestration |
+| **Groq API (Llama 3.3-70B)** | LLM inference for classification + extraction (~300 tok/s) |
+| **Docling (IBM)** | PDF → Markdown with preserved table structure |
+| **Pydantic v2** | Runtime validation on all LLM outputs and API boundaries |
+| **SQLAlchemy 2.0** | ORM layer over Supabase PostgreSQL |
+| **Apify Client** | Managed scraper for live freight rate market data |
+| **uv** | 10–100× faster than pip, lock-file reproducibility |
+
+### Authentication & Database
+| Technology | Purpose |
+|-----------|---------|
+| **Supabase Auth** | User authentication, session management, JWT tokens |
+| **Supabase (PostgreSQL)** | Primary database for invoices, feedback, audit metadata |
+
+### Cloud Infrastructure — Google Cloud Platform
+| Service | Purpose |
+|---------|---------|
+| **GCP Cloud Run** | Containerized FastAPI backend hosting (auto-scaling, serverless) |
+| **GCP Cloud Storage Bucket** | Object storage for uploaded PDFs and generated JSON audit reports |
+| **GCP Web Hosting** | Static frontend delivery for the Stitch-generated dashboard |
+
+### Security & Networking
+| Technology | Purpose |
+|-----------|---------|
+| **Cloudflare CDN** | Global edge caching + DDoS protection |
+| **HTTPS / TLS / SSL** | End-to-end encrypted traffic on all endpoints |
+| **Supabase RLS** | Row-level security policies on database tables |
+| **Pydantic Settings** | Env var validation at startup (secrets never in code) |
+
+### DevOps & Tooling
+| Technology | Purpose |
+|-----------|---------|
+| **Docker (multi-stage)** | Reproducible containerization (builder + slim runtime) |
+| **GitHub Actions** | CI/CD pipelines — lint, test, build, deploy to GCP |
+| **GitHub** | Source control + release management |
+| **Postman** | API testing, request/response verification between frontend ↔ backend |
+| **pytest + pytest-mock** | 8 test modules covering all agents and utilities |
+
+---
+
+## Architecture Overview
+
+```
+ ┌────────────────────┐     HTTPS      ┌────────────────────┐
+ │  Google Stitch UI  │ ─────────────► │   Cloudflare CDN   │
+ │  (HTML + TS + Vite)│                │   (DDoS + TLS)     │
+ └────────────────────┘                └──────────┬─────────┘
+         │                                        │
+         │ Supabase Auth (JWT)                    ▼
+         │                              ┌────────────────────┐
+         │                              │   GCP Cloud Run    │
+         │                              │   FastAPI Backend  │
+         │                              │   (Dockerized)     │
+         │                              └──────────┬─────────┘
+         │                                         │
+         │                     ┌───────────────────┼────────────────────┐
+         │                     ▼                   ▼                    ▼
+         │            ┌────────────────┐  ┌────────────────┐  ┌────────────────┐
+         └──────────► │ Supabase (PG)  │  │  GCP Storage   │  │   Groq LLM     │
+                      │ users/invoices │  │  PDFs/Reports  │  │ Llama 3.3-70B  │
+                      └────────────────┘  └────────────────┘  └────────────────┘
+```
 
 ---
 
@@ -46,7 +107,7 @@ cpa-ai-agent/
 │   ├── orchestrator.py        Hermes Orchestrator — LangGraph state machine
 │   ├── ingestion.py           Classifies PDFs: invoice vs. other document
 │   ├── extraction.py          Docling + Groq → structured InvoiceData
-│   ├── storage.py             SQLite dedup + save, returns row ID
+│   ├── storage.py             Supabase dedup + save
 │   ├── benchmarking.py        Apify / mock freight rate comparison
 │   ├── analysis.py            Anomaly detection + AnomalyReport generation
 │   └── feedback.py            Stores CPA corrections for continuous improvement
@@ -59,44 +120,31 @@ cpa-ai-agent/
 │   └── pydantic_models.py     Pydantic models (InvoiceData, LineItem, etc.)
 │
 ├── utils/
-│   ├── settings.py            Pydantic Settings — validates env vars at startup
-│   ├── db_utils.py            Database connection + init helpers
-│   ├── freight_rate_service.py  Strategy pattern: ApifyService / MockApifyService
-│   ├── cache.py               File-hash-based cache for Docling + LLM responses
-│   ├── retry.py               Exponential backoff decorator for LLM calls
-│   ├── timer.py               Pipeline step timing utilities
-│   └── generate_dummy_pdf.py  Generates test PDF invoices via ReportLab
+│   ├── settings.py            Pydantic Settings — env var validation
+│   ├── db_utils.py            Supabase connection helpers
+│   ├── freight_rate_service.py  Strategy pattern: Apify / Mock
+│   ├── cache.py               File-hash cache for Docling + LLM
+│   ├── retry.py               Exponential backoff decorator
+│   └── timer.py               Pipeline step timing
 │
-├── frontend/
-│   ├── dashboard.html         Multi-section SPA (overview, auditor, ledger, …)
-│   ├── index.html             Landing page
+├── frontend/                  Google Stitch HTML + Vite + TypeScript
+│   ├── index.html             Landing page (Stitch)
+│   ├── dashboard.html         Dashboard SPA (Stitch)
 │   ├── src/
 │   │   ├── api.ts             Typed API client — all 18 endpoints
-│   │   ├── dashboard.ts       Dashboard logic, SSE streaming, chat widget
-│   │   └── main.ts            Landing page interactions
-│   ├── vite.config.ts         Multi-page build + /api proxy → localhost:8000
-│   └── package.json
+│   │   ├── dashboard.ts       Dashboard logic + SSE streaming
+│   │   └── main.ts            Landing interactions
+│   └── vite.config.ts
 │
-├── tests/
-│   ├── conftest.py
-│   ├── test_analysis.py
-│   ├── test_benchmarking.py
-│   ├── test_cache.py
-│   ├── test_feedback.py
-│   ├── test_models.py
-│   ├── test_retry.py
-│   ├── test_storage.py
-│   └── test_timer.py
-│
-├── input_docs/                Drop PDF invoices here before running pipeline
-├── output_reports/            Generated JSON audit reports land here
+├── tests/                     pytest suite (8 modules)
+├── input_docs/                Drop PDFs here for local runs
+├── output_reports/            Generated JSON audit reports
 ├── main.py                    CLI entry point
-├── start_backend.py           Convenience script: starts Uvicorn on port 8000
+├── start_backend.py           Uvicorn launcher
 ├── Dockerfile                 Multi-stage Docker build
-├── render.yaml                Render / Railway deploy config
+├── .github/workflows/         GitHub Actions CI/CD
 ├── pyproject.toml
-├── .env.example
-└── SYSTEM_DESIGN.html         Full HLD + LLD system design document
+└── SYSTEM_DESIGN.html         Full HLD + LLD document
 ```
 
 ---
@@ -104,35 +152,34 @@ cpa-ai-agent/
 ## Quick Start
 
 ### 1. Install dependencies
-
 ```bash
 # Requires Python 3.12+
 uv sync
 ```
 
 ### 2. Configure environment
-
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and set at minimum:
-
 ```env
-GROQ_API_KEY=gsk_...          # Required — get free at console.groq.com/keys
-USE_MOCK_APIFY=true           # Keep true to run without Apify credits
+GROQ_API_KEY=gsk_...
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_KEY=eyJ...
+GCP_PROJECT_ID=your-project
+GCP_STORAGE_BUCKET=cpa-reports
+USE_MOCK_APIFY=true
 ```
 
 ### 3. Start the backend
-
 ```bash
 uv run python start_backend.py
-# → API running at http://localhost:8000
-# → Interactive docs at http://localhost:8000/api/docs
+# → API at http://localhost:8000
+# → Docs at http://localhost:8000/api/docs
 ```
 
 ### 4. Start the frontend
-
 ```bash
 cd frontend
 npm install
@@ -140,179 +187,121 @@ npm run dev
 # → Dashboard at http://localhost:3000/dashboard.html
 ```
 
-### 5. Run the pipeline (CLI)
-
-```bash
-# Generate a test invoice PDF
-uv run python main.py generate
-
-# Run full audit on input_docs/
-uv run python main.py run
-
-# Verbose output
-uv run python main.py run --verbose
-
-# Use real Apify (requires APIFY_API_TOKEN)
-uv run python main.py run --no-mock
-```
-
----
-
-## CLI Reference
-
-| Command | Description |
-|---------|-------------|
-| `uv run python main.py run` | Audit all PDFs in `input_docs/` |
-| `uv run python main.py run --input ./path` | Audit PDFs from a custom folder |
-| `uv run python main.py run --no-mock` | Use live Apify rates instead of mock |
-| `uv run python main.py run --verbose` | Debug-level output |
-| `uv run python main.py generate` | Create a sample invoice PDF |
-| `uv run python main.py status` | Print current config and DB counts |
-| `uv run python main.py feedback` | View all CPA correction entries |
-
 ---
 
 ## API Endpoints
 
-All endpoints prefixed `/api`. OpenAPI docs available at `/api/docs` when the server is running.
+All endpoints prefixed `/api`. Tested via **Postman** collection. OpenAPI docs at `/api/docs`.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/health` | Liveness check |
 | `GET` | `/api/status` | Config + DB counts + pipeline state |
-| `GET` | `/api/dashboard` | Aggregated analytics (severity, vendors, anomalies) |
-| `GET` | `/api/invoices` | Paginated invoice list (`?page=1&page_size=20`) |
-| `GET` | `/api/invoices/:id` | Single invoice + its audit report |
+| `GET` | `/api/dashboard` | Aggregated analytics |
+| `GET` | `/api/invoices` | Paginated invoice list |
+| `GET` | `/api/invoices/:id` | Single invoice + audit report |
 | `POST` | `/api/invoices/:id/feedback` | Submit a CPA correction |
-| `GET` | `/api/reports` | List saved audit report files |
-| `GET` | `/api/reports/:filename` | Download raw JSON audit report |
-| `POST` | `/api/pipeline/run` | Trigger full pipeline (`{ export_csv: bool }`) |
-| `GET` | `/api/pipeline/status` | Poll pipeline state (idle/running/completed/failed) |
-| `GET` | `/api/pipeline/stream` | SSE stream of live pipeline log lines |
-| `POST` | `/api/upload` | Upload PDF invoices (multipart) |
-| `GET` | `/api/feedback` | All correction entries + most common corrections |
+| `GET` | `/api/reports` | List saved audit reports |
+| `GET` | `/api/reports/:filename` | Download JSON report (from GCP bucket) |
+| `POST` | `/api/pipeline/run` | Trigger full pipeline |
+| `GET` | `/api/pipeline/status` | Poll pipeline state |
+| `GET` | `/api/pipeline/stream` | SSE stream of pipeline logs |
+| `POST` | `/api/upload` | Upload PDFs → GCP Storage |
+| `GET` | `/api/feedback` | All correction entries |
 | `DELETE` | `/api/cache` | Clear Docling + LLM cache |
 
 ---
 
-## Agent Pipeline
-
-The **Hermes Orchestrator** (LangGraph state machine) runs agents as nodes in a directed graph. Each node reads from and writes to a shared `AgentState` dict — no manual parameter passing.
+## Agent Pipeline (LangGraph)
 
 ```
 scan_docs → classify ──► not invoice → END
                   │
                   ▼ invoice
-              extract (Docling + Groq LLM)
+              extract   (Docling + Groq LLM)
                   │
-              store (SQLite dedup + save)
+              store     (Supabase dedup + save)
                   │
               benchmark (Apify / mock rates)
                   │
-              analyze (flag anomalies by severity)
+              analyze   (flag anomalies by severity)
                   │
-              save_report (JSON to output_reports/)
+              save_report (JSON → GCP Storage Bucket)
 ```
 
-**Anomaly severity thresholds** (configurable via `BENCHMARK_THRESHOLD_PERCENT`):
+**Anomaly severity thresholds:**
 
 | Severity | Condition |
 |----------|-----------|
 | Critical | Price > 50% above market |
 | High | Price 30–50% above market |
 | Medium | Price 15–30% above market |
-| Low | Price within threshold or minor field issues |
+| Low | Within threshold / minor field issues |
 
 ---
 
-## Dashboard
+## Security
 
-The frontend is a zero-framework TypeScript SPA built with Vite. Seven sections:
-
-| Section | What it shows |
-|---------|--------------|
-| **Overview** | Severity donut, top vendors by spend, recent invoices |
-| **AI Auditor** | Upload PDFs, trigger pipeline, live SSE log stream |
-| **Entities** | Paginated invoice database table |
-| **Compliance** | Anomaly type breakdown and high-risk flags |
-| **Ledger** | Accounting-style view of all extracted invoices |
-| **Audit Logs** | Feedback history + pipeline state |
-| **API Status** | Live config check (Groq, Apify, mock mode, counts) |
-
-A floating **Sovereign Assistant** chat widget answers questions about the system and proxies live API data (invoice count, pipeline status, anomaly counts).
+| Control | Implementation |
+|---------|---------------|
+| **Transport** | HTTPS everywhere — TLS/SSL certificates via Cloudflare |
+| **DDoS** | Cloudflare CDN edge protection on all public routes |
+| **Auth** | Supabase Auth with JWT validation on every protected endpoint |
+| **Database** | Supabase Row-Level Security (RLS) policies |
+| **Secrets** | Env vars only — never in code, logs, or error responses |
+| **Validation** | Pydantic v2 schemas at every API boundary |
+| **Containers** | Non-root user, multi-stage Docker, minimal slim runtime |
 
 ---
 
-## Configuration
+## Deployment — Google Cloud Platform
 
-Full list of environment variables (see `.env.example`):
+### Backend → GCP Cloud Run
+```bash
+# Build + push to Artifact Registry
+docker build -t gcr.io/$GCP_PROJECT_ID/cpa-backend .
+docker push gcr.io/$GCP_PROJECT_ID/cpa-backend
 
-```env
-# Required
-GROQ_API_KEY=gsk_...
-
-# Optional — Apify
-APIFY_API_TOKEN=your_token
-USE_MOCK_APIFY=true              # false = live Apify scraping
-
-# Database
-DATABASE_URL=sqlite:///cpa_agent.db
-
-# Tuning
-BENCHMARK_THRESHOLD_PERCENT=15.0  # % above market to flag as anomaly
-CACHE_TTL_HOURS=24.0              # How long to cache Docling + LLM results
-GROQ_MODEL=llama-3.3-70b-versatile
-LOG_LEVEL=INFO
+# Deploy to Cloud Run
+gcloud run deploy cpa-backend \
+  --image gcr.io/$GCP_PROJECT_ID/cpa-backend \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars GROQ_API_KEY=...,SUPABASE_URL=...
 ```
 
-**Mock mode** (`USE_MOCK_APIFY=true`) uses a built-in table of realistic freight rates for 31 routes — the pipeline runs completely without Apify credits.
+### Frontend → GCP Web Hosting
+```bash
+cd frontend && npm run build
+gsutil -m rsync -r dist gs://cpa-frontend-bucket
+```
+
+### Storage → GCP Cloud Storage Bucket
+- **`cpa-uploads`** — uploaded PDF invoices
+- **`cpa-reports`** — generated JSON audit reports
+
+### CDN → Cloudflare
+Point Cloudflare DNS at the GCP load balancer, enable **Full (Strict) SSL**, **Always Use HTTPS**, and **DDoS protection**.
+
+### CI/CD → GitHub Actions
+`.github/workflows/deploy.yml` runs on push to `main`:
+1. Lint + pytest
+2. Build Docker image
+3. Push to GCP Artifact Registry
+4. Deploy to Cloud Run
+5. Build frontend + sync to GCP bucket
 
 ---
 
 ## Running Tests
 
 ```bash
-uv run pytest
-uv run pytest -v              # verbose
-uv run pytest tests/test_analysis.py  # single module
+uv run pytest            # full suite
+uv run pytest -v         # verbose
 ```
 
-8 test modules cover: analysis, benchmarking, cache, feedback, models, retry, storage, and timer utilities.
-
----
-
-## Docker
-
-```bash
-# Build
-docker build -t cpa-ai-agent .
-
-# Run (mock mode, no Apify needed)
-docker run -p 8000:8000 \
-  -e GROQ_API_KEY=gsk_... \
-  -e USE_MOCK_APIFY=true \
-  cpa-ai-agent
-
-# Health check
-curl http://localhost:8000/api/health
-```
-
-> Note: The image is ~8.7 GB due to Docling's torch/CUDA dependencies.
-
----
-
-## Deployment
-
-### Railway (recommended free tier)
-
-1. Push to GitHub
-2. New Project → Deploy from repo → Railway auto-detects the Dockerfile
-3. Add env var: `GROQ_API_KEY`
-4. Deploy frontend to **Vercel**: import repo, set root directory to `frontend`, add `VITE_API_URL` pointing to your Railway backend URL
-
-### Render
-
-`render.yaml` is included. Two services — backend (Docker web service) and frontend (static site). Import as a Blueprint in the Render dashboard.
+8 test modules cover: analysis, benchmarking, cache, feedback, models, retry, storage, timer.
 
 ---
 
@@ -320,37 +309,12 @@ curl http://localhost:8000/api/health
 
 | Pattern | Where | Purpose |
 |---------|-------|---------|
-| **State Machine** | `HermesOrchestrator` | LangGraph manages typed state flow between agents |
-| **Strategy** | `FreightRateService` | Swap mock ↔ live Apify without touching agent code |
-| **Factory** | `create_rate_service()` | Single creation point driven by `USE_MOCK_APIFY` env var |
-| **Dependency Injection** | `BenchmarkingAgent(rate_service=...)` | Injected service makes unit testing trivial |
-| **Human-in-the-Loop** | `FeedbackAgent` | CPA corrections stored for future model fine-tuning |
-| **Cache-Aside** | `utils/cache.py` | File-hash cache prevents redundant Docling + LLM calls |
-
----
-
-## Sample Audit Report
-
-```json
-{
-  "report_metadata": {
-    "generated_at": "2026-04-15T02:51:05.597926",
-    "tool": "CPA AI Agent v0.1"
-  },
-  "anomaly_report": {
-    "invoice_number": "INV-2024-0042",
-    "vendor_name": "Shanghai Global Freight Co., Ltd.",
-    "anomalies": [
-      "MEDIUM: 'Shanghai -> Los Angeles' unit price $1500.00 is 21.6% above market average $1234.10",
-      "DUPLICATE: Invoice already exists in database (id=1)"
-    ],
-    "severity": "high",
-    "summary": "2 issue(s) found in INV-2024-0042"
-  },
-  "invoice_data": { "..." : "..." },
-  "benchmark_results": [ "..." ]
-}
-```
+| **State Machine** | `HermesOrchestrator` | LangGraph typed state flow |
+| **Strategy** | `FreightRateService` | Swap mock ↔ live Apify |
+| **Factory** | `create_rate_service()` | Env-driven instantiation |
+| **Dependency Injection** | `BenchmarkingAgent` | Trivial unit testing |
+| **Human-in-the-Loop** | `FeedbackAgent` | CPA corrections for fine-tuning |
+| **Cache-Aside** | `utils/cache.py` | Skip redundant Docling + LLM calls |
 
 ---
 
