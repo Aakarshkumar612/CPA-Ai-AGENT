@@ -21,12 +21,14 @@ WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 
 # Copy application code
-COPY agents/      ./agents/
-COPY api/         ./api/
-COPY models/      ./models/
-COPY utils/       ./utils/
-COPY main.py      ./main.py
+COPY agents/          ./agents/
+COPY api/             ./api/
+COPY models/          ./models/
+COPY utils/           ./utils/
+COPY main.py          ./main.py
 COPY start_backend.py ./start_backend.py
+COPY streamlit_app.py ./streamlit_app.py
+COPY .streamlit/      ./.streamlit/
 
 # Create persistent directories
 RUN mkdir -p input_docs output_reports
@@ -36,12 +38,24 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Expose API port
-EXPOSE 8000
+# SERVE_MODE controls which server starts:
+#   api       → FastAPI on PORT (default 8000)
+#   streamlit → Streamlit on PORT (default 8501)
+ENV SERVE_MODE=api \
+    PORT=8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"
+EXPOSE 8000 8501
 
-# Run the server (no reload in production)
-CMD ["python", "start_backend.py", "--no-reload", "--host", "0.0.0.0", "--port", "8000"]
+# Health check adapts to serve mode
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD python -c "import urllib.request, os; urllib.request.urlopen(f'http://localhost:{os.environ[\"PORT\"]}/' + ('api/health' if os.environ.get('SERVE_MODE') == 'api' else '_stcore/health'))"
+
+CMD ["sh", "-c", \
+  "if [ \"$SERVE_MODE\" = 'streamlit' ]; then \
+     streamlit run streamlit_app.py \
+       --server.port \"${PORT:-8501}\" \
+       --server.address 0.0.0.0 \
+       --server.headless true; \
+   else \
+     python start_backend.py --no-reload --host 0.0.0.0 --port \"${PORT:-8000}\"; \
+   fi"]

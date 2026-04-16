@@ -4,10 +4,40 @@
 ## Note: Free plan services spin down after 15 min of inactivity.
 ## First request after sleep takes ~30s to wake up.
 ## SQLite data does NOT persist across deploys on free plan (no disk).
+##
+## Two deployment modes — uncomment the one you want:
+##   Mode A: Streamlit UI only  (SERVE_MODE=streamlit, PORT=8501)
+##   Mode B: FastAPI backend only (SERVE_MODE=api, PORT=8000)
 
 services:
 
-  # ── Backend: FastAPI (Docker) ─────────────────────────────────────────────
+  # ── Mode A: Streamlit UI (recommended for demos) ──────────────────────────
+  - type: web
+    name: cpa-ai-agent-streamlit
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+
+    envVars:
+      - key: SERVE_MODE
+        value: "streamlit"
+      - key: PORT
+        value: "8501"
+      - key: GROQ_API_KEY
+        sync: false           # Required — set in Render dashboard
+      - key: APIFY_API_TOKEN
+        sync: false           # Optional — leave blank to use mock mode
+      - key: USE_MOCK_APIFY
+        value: "true"
+      - key: DATABASE_URL
+        value: sqlite:///cpa_agent.db
+      - key: PYTHONUNBUFFERED
+        value: "1"
+
+    healthCheckPath: /_stcore/health
+
+  # ── Mode B: FastAPI Backend (for API/frontend split) ──────────────────────
   - type: web
     name: cpa-ai-agent-backend
     runtime: docker
@@ -16,6 +46,10 @@ services:
     region: oregon
 
     envVars:
+      - key: SERVE_MODE
+        value: "api"
+      - key: PORT
+        value: "8000"
       - key: GROQ_API_KEY
         sync: false           # Required — set in Render dashboard
       - key: APIFY_API_TOKEN
