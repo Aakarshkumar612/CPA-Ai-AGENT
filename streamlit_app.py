@@ -165,7 +165,8 @@ with st.sidebar:
     st.write(f"{'✅' if groq_ok else '❌'} Groq API key")
     st.write(f"{'🔧' if mock_mode else '🌐'} {'Mock freight rates' if mock_mode else 'Live Apify rates'}")
 
-    pdf_count = len(list(INPUT_DIR.glob("*.pdf")))
+    from utils.file_utils import find_supported_files
+    pdf_count = len(find_supported_files(INPUT_DIR))
     report_count = len(list(OUTPUT_DIR.glob("audit_*.json")))
     st.write(f"📁 {pdf_count} PDF(s) in queue")
     st.write(f"📊 {report_count} audit report(s)")
@@ -187,10 +188,10 @@ if page == "🚀 Upload & Run":
 
     # ── File upload ────────────────────────────────────────────────────────────
     uploaded_files = st.file_uploader(
-        "Upload PDF invoice(s)",
-        type="pdf",
+        "Upload invoice(s) — PDF, JPG, PNG, DOCX",
+        type=["pdf", "jpg", "jpeg", "png", "docx", "doc"],
         accept_multiple_files=True,
-        help="Drag and drop one or more freight invoices. Saved into input_docs/.",
+        help="Supports any English-language invoice: Indian GST, commercial, freight, service invoices etc.",
     )
     if uploaded_files:
         for uf in uploaded_files:
@@ -201,7 +202,8 @@ if page == "🚀 Upload & Run":
         st.rerun()
 
     # ── Queue viewer ───────────────────────────────────────────────────────────
-    pdfs = sorted(INPUT_DIR.glob("*.pdf"))
+    from utils.file_utils import find_supported_files
+    pdfs = find_supported_files(INPUT_DIR)
     if pdfs:
         st.write(f"**Queued ({len(pdfs)}):**")
         for pdf in pdfs:
@@ -263,8 +265,9 @@ if page == "🚀 Upload & Run":
                     init_db()
                     _push_log("Loading LangGraph agents (Groq + Docling) — this takes ~30s on first run…")
                     orchestrator = HermesOrchestrator()
-                    pdf_list = list(INPUT_DIR.glob("*.pdf"))
-                    _push_log(f"Processing {len(pdf_list)} PDF(s) in input_docs/…")
+                    from utils.file_utils import find_supported_files
+                    pdf_list = find_supported_files(INPUT_DIR)
+                    _push_log(f"Processing {len(pdf_list)} file(s) in input_docs/…")
                     result = orchestrator.run(str(INPUT_DIR), export_csv=export_csv)
                     _push_log(f"Done: {result.get('summary', 'completed')}")
                     job["result"] = result

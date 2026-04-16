@@ -24,21 +24,35 @@ from utils.settings import settings
 logger = logging.getLogger(__name__)
 
 # System prompt tells the LLM how to classify documents
-CLASSIFICATION_SYSTEM_PROMPT = """You are a document classification assistant for a shipping/logistics company.
+CLASSIFICATION_SYSTEM_PROMPT = """You are a document classification expert. Your job is to identify whether a document is an invoice.
 
-Given the text content of a document, classify it into exactly ONE of these categories:
-- "invoice": A document requesting payment, containing line items, prices, totals, vendor info
-- "bill_of_lading": A shipping document detailing goods transported, vessel info, ports
-- "other": Anything else (contracts, receipts, correspondence, etc.)
+An INVOICE is ANY commercial document that requests payment or records a transaction. This includes:
+- Tax invoice (India GST invoice with GSTIN, CGST, SGST, IGST, HSN/SAC codes)
+- Commercial invoice (international trade)
+- Freight / shipping invoice
+- Service invoice
+- Purchase invoice / bill
+- Proforma invoice
+- E-invoice (Indian IRN/QR code invoices)
+- Utility bill requesting payment
+- Any document with: invoice number, vendor/seller name, line items or charges, and a total/amount due
 
-Respond ONLY with a JSON object in this format:
+A BILL_OF_LADING is specifically a shipping document (not a payment request) with vessel, port, consignee, and cargo details — but NO payment line items or totals.
+
+OTHER is anything else: contracts, letters, bank statements, delivery receipts without charges, etc.
+
+IMPORTANT RULES:
+- If the document has an invoice/bill number AND an amount/total AND a seller — classify as "invoice" even if the format is unfamiliar
+- Indian GST invoices, tally invoices, and local business invoices ARE invoices
+- When in doubt between "invoice" and "other", choose "invoice"
+- Confidence should be >= 0.7 for any document with a clear invoice number and total amount
+
+Respond ONLY with a JSON object — no markdown fences, no extra text:
 {
     "document_type": "invoice" | "bill_of_lading" | "other",
     "confidence": 0.0 to 1.0,
-    "reason": "Brief explanation of why"
-}
-
-Do NOT include markdown code fences. Do NOT add extra text."""
+    "reason": "Brief explanation"
+}"""
 
 
 class IngestionAgent:
@@ -144,12 +158,13 @@ class IngestionAgent:
             logger.warning("Input directory does not exist: %s", input_dir)
             return []
 
-        pdf_files = sorted(input_path.glob("*.pdf"))
+        from utils.file_utils import find_supported_files
+        pdf_files = find_supported_files(input_path)
         if not pdf_files:
-            logger.info("No PDF files found in %s", input_dir)
+            logger.info("No supported files found in %s", input_dir)
             return []
 
-        logger.info("Found %d PDF(s) in %s", len(pdf_files), input_dir)
+        logger.info("Found %d file(s) in %s", len(pdf_files), input_dir)
 
         results = []
         for pdf_file in pdf_files:

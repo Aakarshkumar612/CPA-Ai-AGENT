@@ -189,11 +189,15 @@ def project_status():
 
 @app.post("/api/upload")
 async def upload_pdfs(files: list[UploadFile] = File(...)):
-    """Upload one or more PDF files into input_docs/."""
+    """Upload one or more invoice files (PDF, JPG, PNG, DOCX) into input_docs/."""
+    from utils.file_utils import is_supported, SUPPORTED_FORMATS_LABEL
     saved = []
     for upload in files:
-        if not upload.filename or not upload.filename.lower().endswith(".pdf"):
-            raise HTTPException(400, detail=f"Only PDF files accepted, got: {upload.filename}")
+        if not upload.filename or not is_supported(upload.filename):
+            raise HTTPException(
+                400,
+                detail=f"Unsupported file type: {upload.filename}. Accepted: {SUPPORTED_FORMATS_LABEL}",
+            )
         dest = INPUT_DIR / upload.filename
         with open(dest, "wb") as f:
             shutil.copyfileobj(upload.file, f)

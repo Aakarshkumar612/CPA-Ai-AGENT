@@ -33,40 +33,48 @@ from utils.settings import settings
 logger = logging.getLogger(__name__)
 
 # System prompt instructs the LLM on exactly what fields to extract
-EXTRACTION_SYSTEM_PROMPT = """You are an expert invoice data extraction specialist.
+EXTRACTION_SYSTEM_PROMPT = """You are an expert invoice data extraction specialist. You can read invoices from ANY country and format — including Indian GST invoices, international commercial invoices, freight invoices, service invoices, and more.
 
-Given the text/markdown content of a shipping/logistics invoice, extract the following fields:
+Given the text/markdown content of an invoice, extract the following fields:
 
 REQUIRED FIELDS:
-- vendor_name: Name of the vendor/supplier company
-- invoice_number: The unique invoice identifier (e.g., "INV-2024-0042")
-- invoice_date: Date the invoice was issued (format: YYYY-MM-DD)
-- currency: Currency code (e.g., "USD", "EUR", "CNY") — default "USD"
-- incoterms: Shipping incoterms if present (e.g., "FOB Shanghai", "CIF Los Angeles") — null if not found
-- line_items: Array of line items, each with:
-  - description: What the charge is for
-  - quantity: Number of units
-  - unit_price: Price per single unit
-  - total: Total for this line item (quantity × unit_price)
-- total_amount: The grand total of the invoice
+- vendor_name: Name of the vendor/supplier/seller company or individual
+- invoice_number: The unique invoice identifier (any format: INV-001, GSTIN-based, alphanumeric)
+- invoice_date: Date the invoice was issued (format: YYYY-MM-DD). Convert Indian formats like "15/03/2024" or "15-Mar-2024" to YYYY-MM-DD.
+- currency: Currency code — INR for Indian invoices, USD for US, EUR for Europe, etc. Infer from ₹/Rs/INR symbols.
+- incoterms: Shipping incoterms if present (e.g., "FOB Mumbai", "CIF Los Angeles") — null if not a freight invoice
+- line_items: Array of all line items / charges / products, each with:
+  - description: What the product/service/charge is
+  - quantity: Number of units (use 1.0 if not specified)
+  - unit_price: Price per unit (exclude tax — use base price)
+  - total: Total for this line item before tax
+- total_amount: The GRAND TOTAL including all taxes (GST/IGST/CGST/SGST, VAT, etc.)
+
+INDIAN INVOICE NOTES:
+- GSTIN: Goods and Services Tax Identification Number — not the invoice number
+- HSN/SAC codes are product codes — not part of line item description needed
+- CGST + SGST = 2 halves of the same GST (add both to get total tax)
+- IGST = inter-state GST (use as-is)
+- ₹ or Rs or INR = Indian Rupee → currency = "INR"
+- "Bill To" / "Ship To" → the buyer, NOT the vendor
+- Vendor = the company that ISSUED the invoice (usually top of document)
 
 IMPORTANT:
-- Extract numbers as plain floats (no currency symbols, no commas): 1500.00 not "$1,500.00"
-- If a field cannot be found, use null (not "N/A" or "unknown")
-- Respond ONLY with a valid JSON object — no markdown fences, no extra text
-- Double-check that the sum of line item totals is close to the invoice total
+- Extract amounts as plain floats — no currency symbols, no commas: 15000.00 not "₹15,000.00"
+- If a field cannot be found, use null
+- Respond ONLY with valid JSON — no markdown fences, no extra text
 
 JSON FORMAT:
 {
     "vendor_name": "...",
     "invoice_number": "...",
     "invoice_date": "YYYY-MM-DD",
-    "currency": "USD",
-    "incoterms": "...",
+    "currency": "INR",
+    "incoterms": null,
     "line_items": [
-        {"description": "...", "quantity": 20, "unit_price": 1500.0, "total": 30000.0}
+        {"description": "...", "quantity": 1.0, "unit_price": 5000.0, "total": 5000.0}
     ],
-    "total_amount": 35650.0
+    "total_amount": 5900.0
 }"""
 
 
@@ -90,47 +98,86 @@ class ExtractionAgent:
         self.llm_cache = get_llm_cache() if use_cache else None
         logger.info("ExtractionAgent initialized with model: %s (cache=%s)", self.model, use_cache)
 
-    def parse_pdf_to_markdown(self, pdf_path: str) -> str:
+    def parse_file_to_markdown(self, file_path: str) -> str:
         """
-        Use Docling to convert a PDF file to structured markdown.
-        
-        Checks cache first — if the PDF hasn't changed, returns cached result.
-        This saves 3-5 seconds per PDF on re-runs.
-        
-        Args:
-            pdf_path: Path to the PDF file
-            
-        Returns:
-            Markdown string representation of the PDF
-        """
-        logger.info("Parsing PDF to markdown: %s", pdf_path)
+        Convert any supported invoice file to text/markdown.
 
-        # Check cache first
+        Strategy:
+          1. Docling (primary) — best quality, preserves tables, handles PDF/images/DOCX
+          2. PyMuPDF fallback  — fast plain-text extraction for PDF and images
+          3. python-docx fallback — plain-text for DOCX / DOC when Docling fails
+
+        Cache is checked before any parsing and written after a successful parse.
+        """
+        logger.info("Parsing file: %s", Path(file_path).name)
+
         if self.docling_cache:
-            cached = self.docling_cache.get(pdf_path)
+            cached = self.docling_cache.get(file_path)
             if cached is not None:
-                logger.info("Docling cache HIT for %s (skipping parse)", Path(pdf_path).name)
+                logger.info("Cache HIT for %s", Path(file_path).name)
                 return cached
 
+        markdown = self._try_docling(file_path) or self._fallback_extract(file_path)
+
+        if self.docling_cache:
+            self.docling_cache.set(file_path, markdown)
+
+        return markdown
+
+    def _try_docling(self, file_path: str) -> str | None:
+        """Attempt Docling conversion. Returns None on failure or empty output."""
         try:
-            result = self.docling_converter.convert(
-                source=Path(pdf_path),
-            )
-            markdown = result.document.export_to_markdown()
-            logger.info(
-                "Docling extracted %d characters from %s",
-                len(markdown), Path(pdf_path).name,
-            )
+            result = self.docling_converter.convert(source=Path(file_path))
+            text = result.document.export_to_markdown()
+            if text.strip():
+                logger.info("Docling: %d chars from %s", len(text), Path(file_path).name)
+                return text
+            logger.warning("Docling returned empty content for %s", Path(file_path).name)
+        except Exception as exc:
+            logger.warning("Docling failed for %s (%s) — trying fallback", Path(file_path).name, exc)
+        return None
 
-            # Store in cache
-            if self.docling_cache:
-                self.docling_cache.set(pdf_path, markdown)
+    def _fallback_extract(self, file_path: str) -> str:
+        """
+        Fallback text extraction using PyMuPDF (PDF/images) or python-docx (DOCX/DOC).
+        Raises if no fallback succeeds.
+        """
+        ext = Path(file_path).suffix.lower()
+        name = Path(file_path).name
 
-            return markdown
+        if ext in (".pdf", ".jpg", ".jpeg", ".png"):
+            try:
+                import fitz  # PyMuPDF
+                doc = fitz.open(file_path)
+                pages = [page.get_text() for page in doc]
+                doc.close()
+                text = "\n\n".join(pages).strip()
+                if text:
+                    logger.info("PyMuPDF fallback: %d chars from %s", len(text), name)
+                    return text
+                raise ValueError("PyMuPDF returned empty text")
+            except Exception as exc:
+                logger.error("PyMuPDF fallback failed for %s: %s", name, exc)
+                raise
 
-        except Exception as e:
-            logger.error("Docling failed to parse %s: %s", pdf_path, e)
-            raise
+        if ext in (".docx", ".doc"):
+            try:
+                from docx import Document
+                doc = Document(file_path)
+                text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+                if text:
+                    logger.info("python-docx fallback: %d chars from %s", len(text), name)
+                    return text
+                raise ValueError("python-docx returned empty text")
+            except Exception as exc:
+                logger.error("python-docx fallback failed for %s: %s", name, exc)
+                raise
+
+        raise ValueError(f"No parser available for format '{ext}' — file: {name}")
+
+    # Backward-compat alias used by orchestrator classify step
+    def parse_pdf_to_markdown(self, pdf_path: str) -> str:
+        return self.parse_file_to_markdown(pdf_path)
 
     def extract_from_markdown(self, markdown: str, filename: str) -> InvoiceData:
         """
@@ -207,17 +254,7 @@ class ExtractionAgent:
         return invoice_data
 
     def extract_from_pdf(self, pdf_path: str) -> InvoiceData:
-        """
-        Full pipeline: PDF → Docling markdown → Groq extraction → InvoiceData.
-        
-        This is the main method called by the orchestrator.
-        
-        Args:
-            pdf_path: Path to the PDF invoice file
-            
-        Returns:
-            InvoiceData — fully validated structured invoice
-        """
+        """Full pipeline: file → Docling markdown → Groq extraction → InvoiceData."""
         filename = Path(pdf_path).name
-        markdown = self.parse_pdf_to_markdown(pdf_path)
+        markdown = self.parse_file_to_markdown(pdf_path)
         return self.extract_from_markdown(markdown, filename)

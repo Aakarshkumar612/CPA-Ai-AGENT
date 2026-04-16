@@ -219,14 +219,15 @@ class HermesOrchestrator:
     # LangGraph merges these updates automatically.
 
     def _scan_docs(self, state: AgentState) -> dict:
-        """Find all PDF files in the input directory."""
+        """Find all supported invoice files (PDF, JPG, PNG, DOCX) in the input directory."""
+        from utils.file_utils import find_supported_files
         input_path = Path(state["input_dir"])
-        pdf_files = sorted([str(p) for p in input_path.glob("*.pdf")])
+        pdf_files = [str(p) for p in find_supported_files(input_path)]
 
         logger.info("Found %d PDF(s) in %s", len(pdf_files), state["input_dir"])
 
         if not pdf_files:
-            state["errors"].append(f"No PDF files found in {state['input_dir']}")
+            state["errors"].append(f"No supported invoice files (PDF/JPG/PNG/DOCX) found in {state['input_dir']}")
 
         return {
             "pdf_files": pdf_files,
