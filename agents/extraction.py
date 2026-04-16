@@ -1,41 +1,32 @@
 """
-Extraction Agent — Converts PDF invoices into structured data.
+Extraction Agent — Converts invoice files into structured data.
 
-What it does:
-1. Uses Docling to parse the PDF into structured markdown (preserves tables!)
-2. Sends the markdown to Groq LLM with a prompt to extract specific fields
-3. Returns validated InvoiceData (Pydantic model)
+Pipeline:
+  1. PyMuPDF  → extracts text from PDF / JPG / PNG (OCR via Tesseract for scanned docs)
+  2. python-docx → extracts text from DOCX / DOC
+  3. Groq LLM  → reads the extracted text and returns structured JSON
 
-Why Docling + LLM (not just LLM)?
-- LLMs can't read PDFs directly — they need text input
-- Simple text extractors lose table structure (line items become garbled)
-- Docling preserves tables as markdown → LLM reads clean structured data
-- This two-step approach is cheaper and more accurate than sending raw PDF bytes
-
-Why not just regex?
-- Invoice formats vary wildly between vendors
-- Regex breaks when vendor changes layout
-- LLMs understand semantic meaning ("this number is the total") regardless of layout
+Why PyMuPDF instead of Docling?
+- Docling pulls in PyTorch + CUDA + transformers (~3.5 GB) — too heavy for free hosting
+- PyMuPDF is a C library (~50 MB), fast, and handles all common invoice formats
+- Groq does the semantic understanding, so the extractor only needs clean text
 """
 
 import json
 import logging
 from pathlib import Path
-from typing import Optional
 from groq import Groq
-from docling.document_converter import DocumentConverter
 
-from models.pydantic_models import InvoiceData, LineItem
+from models.pydantic_models import InvoiceData
 from utils.cache import get_docling_cache, get_llm_cache
 from utils.retry import retry_function
 from utils.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# System prompt instructs the LLM on exactly what fields to extract
 EXTRACTION_SYSTEM_PROMPT = """You are an expert invoice data extraction specialist. You can read invoices from ANY country and format — including Indian GST invoices, international commercial invoices, freight invoices, service invoices, and more.
 
-Given the text/markdown content of an invoice, extract the following fields:
+Given the text content of an invoice, extract the following fields:
 
 REQUIRED FIELDS:
 - vendor_name: Name of the vendor/supplier/seller company or individual
@@ -51,13 +42,13 @@ REQUIRED FIELDS:
 - total_amount: The GRAND TOTAL including all taxes (GST/IGST/CGST/SGST, VAT, etc.)
 
 INDIAN INVOICE NOTES:
-- GSTIN: Goods and Services Tax Identification Number — not the invoice number
-- HSN/SAC codes are product codes — not part of line item description needed
-- CGST + SGST = 2 halves of the same GST (add both to get total tax)
-- IGST = inter-state GST (use as-is)
+- GSTIN is a tax registration number — NOT the invoice number
+- HSN/SAC codes are product codes — skip them in descriptions
+- CGST + SGST together = total GST (add both to get tax amount)
+- IGST = inter-state GST
 - ₹ or Rs or INR = Indian Rupee → currency = "INR"
-- "Bill To" / "Ship To" → the buyer, NOT the vendor
-- Vendor = the company that ISSUED the invoice (usually top of document)
+- "Bill To" / "Ship To" = the buyer, NOT the vendor
+- Vendor = the company that ISSUED the invoice (usually at top of document)
 
 IMPORTANT:
 - Extract amounts as plain floats — no currency symbols, no commas: 15000.00 not "₹15,000.00"
@@ -79,182 +70,159 @@ JSON FORMAT:
 
 
 class ExtractionAgent:
-    """
-    Extracts structured data from PDF invoices using Docling + Groq LLM.
-    
-    Usage:
-        agent = ExtractionAgent()
-        invoice_data = agent.extract_from_pdf("input_docs/invoice.pdf")
-        print(invoice_data.vendor_name)
-        print(invoice_data.total_amount)
-    """
+    """Extracts structured invoice data using PyMuPDF (text) + Groq LLM (understanding)."""
 
     def __init__(self, model: str | None = None, use_cache: bool = True):
         self.client = Groq(api_key=settings.GROQ_API_KEY)
         self.model = model or settings.GROQ_MODEL
-        self.docling_converter = DocumentConverter()
         self.use_cache = use_cache
         self.docling_cache = get_docling_cache() if use_cache else None
         self.llm_cache = get_llm_cache() if use_cache else None
-        logger.info("ExtractionAgent initialized with model: %s (cache=%s)", self.model, use_cache)
+        logger.info("ExtractionAgent initialized (model=%s, cache=%s)", self.model, use_cache)
+
+    # ── File → text ────────────────────────────────────────────────────────────
 
     def parse_file_to_markdown(self, file_path: str) -> str:
         """
-        Convert any supported invoice file to text/markdown.
+        Extract text from any supported invoice file.
 
-        Strategy:
-          1. Docling (primary) — best quality, preserves tables, handles PDF/images/DOCX
-          2. PyMuPDF fallback  — fast plain-text extraction for PDF and images
-          3. python-docx fallback — plain-text for DOCX / DOC when Docling fails
+        Routing:
+          PDF / JPG / PNG  → PyMuPDF  (OCR via Tesseract for scanned/image pages)
+          DOCX / DOC       → python-docx  (paragraphs + tables)
 
-        Cache is checked before any parsing and written after a successful parse.
+        Result is cached by file content hash so re-runs skip re-parsing.
         """
-        logger.info("Parsing file: %s", Path(file_path).name)
+        logger.info("Parsing: %s", Path(file_path).name)
 
         if self.docling_cache:
             cached = self.docling_cache.get(file_path)
             if cached is not None:
-                logger.info("Cache HIT for %s", Path(file_path).name)
+                logger.info("Cache HIT — skipping parse for %s", Path(file_path).name)
                 return cached
 
-        markdown = self._try_docling(file_path) or self._fallback_extract(file_path)
-
-        if self.docling_cache:
-            self.docling_cache.set(file_path, markdown)
-
-        return markdown
-
-    def _try_docling(self, file_path: str) -> str | None:
-        """Attempt Docling conversion. Returns None on failure or empty output."""
-        try:
-            result = self.docling_converter.convert(source=Path(file_path))
-            text = result.document.export_to_markdown()
-            if text.strip():
-                logger.info("Docling: %d chars from %s", len(text), Path(file_path).name)
-                return text
-            logger.warning("Docling returned empty content for %s", Path(file_path).name)
-        except Exception as exc:
-            logger.warning("Docling failed for %s (%s) — trying fallback", Path(file_path).name, exc)
-        return None
-
-    def _fallback_extract(self, file_path: str) -> str:
-        """
-        Fallback text extraction using PyMuPDF (PDF/images) or python-docx (DOCX/DOC).
-        Raises if no fallback succeeds.
-        """
         ext = Path(file_path).suffix.lower()
-        name = Path(file_path).name
 
         if ext in (".pdf", ".jpg", ".jpeg", ".png"):
-            try:
-                import fitz  # PyMuPDF
-                doc = fitz.open(file_path)
-                pages = [page.get_text() for page in doc]
-                doc.close()
-                text = "\n\n".join(pages).strip()
-                if text:
-                    logger.info("PyMuPDF fallback: %d chars from %s", len(text), name)
-                    return text
-                raise ValueError("PyMuPDF returned empty text")
-            except Exception as exc:
-                logger.error("PyMuPDF fallback failed for %s: %s", name, exc)
-                raise
+            text = self._extract_with_pymupdf(file_path)
+        elif ext in (".docx", ".doc"):
+            text = self._extract_with_docx(file_path)
+        else:
+            raise ValueError(f"Unsupported format '{ext}' for {Path(file_path).name}")
 
-        if ext in (".docx", ".doc"):
-            try:
-                from docx import Document
-                doc = Document(file_path)
-                text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-                if text:
-                    logger.info("python-docx fallback: %d chars from %s", len(text), name)
-                    return text
-                raise ValueError("python-docx returned empty text")
-            except Exception as exc:
-                logger.error("python-docx fallback failed for %s: %s", name, exc)
-                raise
+        if not text.strip():
+            raise ValueError(f"No text could be extracted from {Path(file_path).name}")
 
-        raise ValueError(f"No parser available for format '{ext}' — file: {name}")
+        if self.docling_cache:
+            self.docling_cache.set(file_path, text)
 
-    # Backward-compat alias used by orchestrator classify step
+        return text
+
+    def _extract_with_pymupdf(self, file_path: str) -> str:
+        """
+        Extract text from PDF or image using PyMuPDF.
+
+        For digital PDFs: direct text layer extraction (fast, exact).
+        For scanned PDFs / images: falls back to Tesseract OCR when a page
+        has no selectable text. Requires 'tesseract-ocr' system package.
+        """
+        import fitz  # PyMuPDF
+
+        doc = fitz.open(file_path)
+        pages_text: list[str] = []
+
+        for page_num, page in enumerate(doc):
+            text = page.get_text().strip()
+
+            if not text:
+                # No selectable text — page is an image/scan, try OCR
+                try:
+                    tp = page.get_textpage_ocr(language="eng", dpi=300, full=True)
+                    text = page.get_text(textpage=tp).strip()
+                    if text:
+                        logger.info("OCR used on page %d of %s", page_num + 1, Path(file_path).name)
+                except Exception as ocr_err:
+                    logger.warning("OCR unavailable for page %d: %s", page_num + 1, ocr_err)
+
+            if text:
+                pages_text.append(text)
+
+        doc.close()
+
+        result = "\n\n".join(pages_text)
+        logger.info("PyMuPDF: %d chars from %s", len(result), Path(file_path).name)
+        return result
+
+    def _extract_with_docx(self, file_path: str) -> str:
+        """Extract text from DOCX/DOC — paragraphs and tables."""
+        from docx import Document
+
+        doc = Document(file_path)
+        parts: list[str] = []
+
+        for para in doc.paragraphs:
+            if para.text.strip():
+                parts.append(para.text.strip())
+
+        for table in doc.tables:
+            for row in table.rows:
+                row_text = " | ".join(c.text.strip() for c in row.cells if c.text.strip())
+                if row_text:
+                    parts.append(row_text)
+
+        result = "\n".join(parts)
+        logger.info("python-docx: %d chars from %s", len(result), Path(file_path).name)
+        return result
+
+    # Backward-compat alias — orchestrator calls this name
     def parse_pdf_to_markdown(self, pdf_path: str) -> str:
         return self.parse_file_to_markdown(pdf_path)
 
+    # ── Text → structured data ─────────────────────────────────────────────────
+
     def extract_from_markdown(self, markdown: str, filename: str) -> InvoiceData:
-        """
-        Use Groq LLM to extract structured fields from markdown text.
-        
-        Checks LLM cache first — same markdown + same prompts = cached response.
-        This saves API costs on re-runs.
-        
-        Args:
-            markdown: The markdown text from Docling
-            filename: Original filename (for logging)
-            
-        Returns:
-            InvoiceData — validated and structured invoice
-        """
-        logger.info("Extracting structured data from: %s", filename)
+        """Send extracted text to Groq LLM and return validated InvoiceData."""
+        logger.info("Extracting fields from: %s", filename)
 
-        # Check LLM cache first
         if self.llm_cache:
-            cached_response = self.llm_cache.get(
-                self.model, EXTRACTION_SYSTEM_PROMPT, markdown
-            )
-            if cached_response is not None:
-                logger.info("LLM cache HIT for %s (skipping API call)", filename)
-                raw_text = cached_response
-                return self._parse_llm_response(raw_text, filename)
+            cached = self.llm_cache.get(self.model, EXTRACTION_SYSTEM_PROMPT, markdown)
+            if cached is not None:
+                logger.info("LLM cache HIT for %s", filename)
+                return self._parse_llm_response(cached, filename)
 
-        try:
-            response = retry_function(
-                lambda: self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
-                        {"role": "user", "content": f"Extract data from this invoice:\n\n{markdown}"},
-                    ],
-                    temperature=0.1,
-                    max_tokens=2000,
-                ),
-                max_retries=3,
-                backoff_base=2.0,
-            )
+        response = retry_function(
+            lambda: self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
+                    {"role": "user", "content": f"Extract data from this invoice:\n\n{markdown}"},
+                ],
+                temperature=0.1,
+                max_tokens=2000,
+            ),
+            max_retries=3,
+            backoff_base=2.0,
+        )
 
-            raw_text = response.choices[0].message.content.strip()
+        raw_text = response.choices[0].message.content.strip()
 
-            # Cache the response
-            if self.llm_cache:
-                self.llm_cache.set(
-                    self.model, EXTRACTION_SYSTEM_PROMPT, markdown, raw_text
-                )
+        if self.llm_cache:
+            self.llm_cache.set(self.model, EXTRACTION_SYSTEM_PROMPT, markdown, raw_text)
 
-            return self._parse_llm_response(raw_text, filename)
-
-        except Exception as e:
-            logger.error("Extraction failed for %s: %s", filename, e)
-            raise
+        return self._parse_llm_response(raw_text, filename)
 
     def _parse_llm_response(self, raw_text: str, filename: str) -> InvoiceData:
-        """Parse and validate LLM response text as InvoiceData."""
-        # Handle markdown code fences
         if raw_text.startswith("```"):
             raw_text = raw_text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-
-        extracted_dict = json.loads(raw_text)
-        
-        # Validate with Pydantic — this catches missing/invalid fields
-        invoice_data = InvoiceData(**extracted_dict)
-
+        data = json.loads(raw_text)
+        invoice = InvoiceData(**data)
         logger.info(
-            "Successfully extracted invoice: vendor=%s, number=%s, total=%s",
-            invoice_data.vendor_name,
-            invoice_data.invoice_number,
-            invoice_data.total_amount,
+            "Extracted: vendor=%s  number=%s  total=%s",
+            invoice.vendor_name, invoice.invoice_number, invoice.total_amount,
         )
-        return invoice_data
+        return invoice
 
     def extract_from_pdf(self, pdf_path: str) -> InvoiceData:
-        """Full pipeline: file → Docling markdown → Groq extraction → InvoiceData."""
+        """Convenience method: file → text → InvoiceData."""
         filename = Path(pdf_path).name
-        markdown = self.parse_file_to_markdown(pdf_path)
-        return self.extract_from_markdown(markdown, filename)
+        text = self.parse_file_to_markdown(pdf_path)
+        return self.extract_from_markdown(text, filename)

@@ -6,7 +6,6 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "apify-client>=2.5.0",
-    "docling>=2.88.0",
     "fastapi>=0.135.3",
     "groq>=1.1.2",
     "langgraph>=1.1.6",
